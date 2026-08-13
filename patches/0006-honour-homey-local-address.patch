@@ -1,0 +1,115 @@
+--- a/packages/homey-local/lib/HomeyTypedUtilLocal.mts
++++ b/packages/homey-local/lib/HomeyTypedUtilLocal.mts
+@@ -497,6 +497,41 @@
+ }
+ 
+ export async function getOutboundIp(): Promise<os.NetworkInterfaceInfo> {
++  // Applied here so all four consumers agree: the setup banner, ManagerSystem.getInfo(),
++  // the ipInternal pushed to Athom's cloud, and the ARP sweep.
++  const override = process.env.HOMEY_LOCAL_ADDRESS;
++
++  if (override != null && net.isIPv4(override)) {
++    // When the host owns the address (host networking, macvlan), return the real
++    // interface so the netmask and MAC stay correct.
++    const ifaces = os.networkInterfaces();
++    for (const interfaceName of Object.keys(ifaces)) {
++      for (const networkAddress of ifaces[interfaceName] ?? []) {
++        if (
++          networkAddress.family === 'IPv4' &&
++          networkAddress.internal !== true &&
++          networkAddress.address === override
++        ) {
++          return networkAddress;
++        }
++      }
++    }
++
++    // Otherwise synthesize one. Nothing derives identity from the MAC, so a stable
++    // filler under Docker's locally-administered 02:42 prefix is enough.
++    const octets = override.split('.').map((part) => Number.parseInt(part, 10));
++
++    return {
++      address: override,
++      netmask: '255.255.255.0',
++      family: 'IPv4',
++      mac: ['02', '42', ...octets.map((octet) => octet.toString(16).padStart(2, '0'))].join(':'),
++      internal: false,
++      cidr: `${override}/24`,
++    };
++  }
++
++  // An unset or malformed value falls through to the original probe unchanged.
+   return new Promise((resolve, reject) => {
+     const sock = dgram.createSocket('udp4');
+ 
+--- a/packages/homey-local/lib/Go2rtcDaemon.mts
++++ b/packages/homey-local/lib/Go2rtcDaemon.mts
+@@ -1,4 +1,5 @@
+ import * as fs from 'node:fs/promises';
++import net from 'node:net';
+ import * as path from 'node:path';
+ 
+ import { getErrorMessage } from '@athombv/homey-core';
+@@ -39,6 +40,8 @@
+   webrtcPort?: number;
+   /** Log go2rtc output to stdio (default: false) */
+   logToStdio?: boolean;
++  /** Advertise this IPv4 address as an additional WebRTC ICE candidate (default: none) */
++  webrtcCandidate?: string | null;
+ }
+ 
+ export class Go2rtcDaemon extends NodeService {
+@@ -49,6 +52,7 @@
+   private readonly rtspPort: number;
+   private readonly webrtcPort: number;
+   private readonly logToStdio: boolean;
++  private readonly webrtcCandidate: string | null;
+ 
+   /** Active streams managed by this service */
+   private readonly activeStreams: Map<string, ActiveStream> = new Map();
+@@ -78,6 +82,12 @@
+     this.rtspPort = opts.rtspPort ?? DEFAULT_RTSP_PORT;
+     this.webrtcPort = opts.webrtcPort ?? DEFAULT_WEBRTC_PORT;
+     this.logToStdio = opts.logToStdio ?? false;
++    // Drop invalid values rather than throw: a broken candidates list would fail
++    // go2rtc's start, turning an env-var typo into a whole-server boot failure.
++    this.webrtcCandidate =
++      opts.webrtcCandidate != null && net.isIPv4(opts.webrtcCandidate)
++        ? opts.webrtcCandidate
++        : null;
+   }
+ 
+   /**
+@@ -101,6 +111,13 @@
+    * Generate go2rtc configuration file
+    */
+   private async generateConfig(): Promise<void> {
++    // go2rtc's documented NAT workaround: behind a bridge the self-gathered host
++    // candidate is the container-private IP, so advertise the real address first.
++    const candidates = [
++      ...(this.webrtcCandidate != null ? [`${this.webrtcCandidate}:${this.webrtcPort}`] : []),
++      `stun:${this.webrtcPort}`,
++    ];
++
+     const config = `# Auto-generated go2rtc configuration
+ # Do not edit manually - changes will be overwritten
+ 
+@@ -119,7 +136,7 @@
+     - urls: [stun:stun.l.google.com:19302]
+     - urls: [stun:stun.cloudflare.com:3478]
+   candidates:
+-    - stun:${this.webrtcPort}
++${candidates.map((candidate) => `    - ${candidate}`).join('\n')}
+ 
+ log:
+   level: "${this.logToStdio ? 'debug' : 'info'}"
+--- a/apps/homey-shs/index.mts
++++ b/apps/homey-shs/index.mts
+@@ -68,6 +68,7 @@
+   rtspPort: config.PORT_GO2RTC_RTSP,
+   webrtcPort: config.PORT_SERVER_WEBRTC,
+   logToStdio: config.GO2RTC_LOG_STDIO,
++  webrtcCandidate: config.HOMEY_LOCAL_ADDRESS,
+ });
+ 
+ // Called when a daemon exhausts its restart budget and stays down for good. The server

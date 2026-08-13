@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "homey-shs-enhanced.fullname" . }}
+  labels:
+    {{- include "homey-shs-enhanced.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "homey-shs-enhanced.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: 4859
+      targetPort: http
+      protocol: TCP
+    - name: https
+      port: 4860
+      targetPort: https
+      protocol: TCP
+    # Homey Bridge satellites connect here over the LAN.
+    - name: bridge
+      port: 4861
+      targetPort: bridge
+      protocol: TCP
+    - name: energy
+      port: 4862
+      targetPort: energy
+      protocol: TCP
+    - name: webrtc-tcp
+      port: 8555
+      targetPort: webrtc-tcp
+      protocol: TCP
+    - name: webrtc-udp
+      port: 8555
+      targetPort: webrtc-udp
+      protocol: UDP

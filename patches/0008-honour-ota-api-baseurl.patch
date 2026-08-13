@@ -1,0 +1,19 @@
+--- a/apps/homey-shs/lib/ManagerUpdates.mts
++++ b/apps/homey-shs/lib/ManagerUpdates.mts
+@@ -11,6 +11,7 @@
+ import { ManagerUpdatesLocal } from '@athombv/homey-local';
+ 
+ import type { HomeySHS } from './HomeySHS.mts';
++import { config } from '../config.mts';
+ 
+ type ManagerUpdatesOptionMethods = OptionMethods<{
+   channel: string;
+@@ -126,7 +127,7 @@
+   async getUpdate() {
+     const channel = await this.getOptionChannel();
+ 
+-    const response = await fetch(`https://ota-api.homeyshs.net/${channel}.json`, {
++    const response = await fetch(`${config.ATHOM_OTA_API_BASEURL}/${channel}.json`, {
+       signal: AbortSignal.timeout(5000),
+     });
+ 

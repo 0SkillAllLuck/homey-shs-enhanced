@@ -1,0 +1,20 @@
+{
+  "name": "homey-shs-ember",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Native Silicon Labs Ember/EZSP coordinator support for Homey SHS",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "postinstall": "node scripts/check-herdsman.mjs",
+    "test:unit": "node --conditions=typescript --test test/unit/*.test.mts",
+    "test:compatibility": "node test/compatibility.test.mjs",
+    "test:image": "node --conditions=typescript --test test/image/*.test.mts"
+  },
+  "dependencies": {
+    "zigbee-herdsman": "10.6.2"
+  }
+}

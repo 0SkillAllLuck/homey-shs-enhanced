@@ -1,0 +1,40 @@
+Homey Self-Hosted Server {{ .Chart.AppVersion }} — release {{ .Release.Name }}
+
+Reach the web UI:
+{{- if .Values.ingress.enabled }}
+
+  http{{ if .Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.host }}/
+{{- else if eq .Values.service.type "LoadBalancer" }}
+
+  kubectl -n {{ .Release.Namespace }} get svc {{ include "homey-shs-enhanced.fullname" . }} -w   # wait for the external IP
+  http://<external-ip>:4859/
+
+  Set homey.localAddress to that IP if you have not: it is what the mobile app,
+  Homey Bridges and WebRTC are told to connect to.
+{{- else }}
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "homey-shs-enhanced.fullname" . }} 4859:4859
+  http://127.0.0.1:4859/
+{{- end }}
+
+An unactivated server shows the setup flow — activation needs an Athom account and
+outbound HTTPS from the pod.
+
+State lives in PVC "{{ include "homey-shs-enhanced.claimName" . }}" and survives
+helm uninstall{{ if not .Values.persistence.existingClaim }} (helm.sh/resource-policy: keep){{ end }}.
+{{- if not .Values.hostNetwork }}
+
+mDNS/SSDP/ARP discovery and Matter are link-local, so they are inactive inside the
+cluster network; the app connects through the address above instead. Putting the pod
+on the LAN (hostNetwork: true on a LAN-attached node) enables them.
+{{- end }}
+{{- if and .Values.zigbee.enabled .Values.zigbee.device }}
+{{- if and (hasPrefix "/" .Values.zigbee.device) (not .Values.zigbee.deviceResource) }}
+
+Zigbee: privileged hostPath on {{ .Values.zigbee.device }} — make sure nodeSelector
+pins this pod to the node the coordinator is plugged into.
+{{- else }}
+
+Zigbee: ember backend on {{ .Values.zigbee.device }}.
+{{- end }}
+{{- end }}

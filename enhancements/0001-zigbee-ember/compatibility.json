@@ -1,0 +1,19 @@
+{
+  "baseImage": "ghcr.io/athombv/homey-shs:13.4.0@sha256:97b00d6a074f8abc5d14a457f32e1c7a2b0bcbadfd56999932292efbe071abb9",
+  "homeyShsVersion": "13.4.0",
+  "zigbeeVersion": "4.5.2",
+  "files": {
+    "/app/apps/homey-shs/lib/System.mts": "e45b8f1166f63f9dc094f3d0db30832e30d5ab46ac769009b8bf02cb26bd5a70",
+    "/app/apps/homey-shs/lib/ManagerZigbee.mts": "ef7f4187fcc54a9c30936533bdb007156c1ccaeac31c7ae69de145cd47ffbc85",
+    "/app/apps/homey-shs/managers.mts": "f3435d2e98b77671914623b3c4bde4cc7584a5c2b984740585ae17d3b481483b",
+    "/app/apps/homey-shs/lib/HomeySHS.mts": "6babd379da333b064eee1dd1cb214016ca80a41f2c8f92f39f3f30c97f8f2751",
+    "/app/apps/homey-shs/package.json": "c765cf035bf4f0f28c99ee653d6f509fe7c2fe136e503ce9614f1efbd6ec7923",
+    "/app/node_modules/@athombv/zigbee/package.json": "e1cf0183b8fb0a92a176311d7ffbd70f26962d9ff6a2f2d74f651d088249a51b",
+    "/app/node_modules/@athombv/zigbee/dist/src/Controller.mjs": "43a60f88261cc5cd0a258aa6e03fe77fe4f69ccfcbb988841149498548fa43fe",
+    "/app/node_modules/@athombv/zigbee/dist/src/Controller.d.mts": "a3640dfcc7d996c3b7f7320e2fefeb8ff57b369e0245301f9c1cebed3e80bbaf",
+    "/app/packages/homey-core/lib/ManagerZigbee.mts": "f0942864505ff6f83c57514577a53cec1e1f083e5ff0351eec9ba4f1dc8a8fc9",
+    "/app/packages/homey-core/constants.mts": "612fcba26fa5cf8955c109b791646a59eb54183fc38c98afe102b2fe96174fc1",
+    "/app/packages/homey-local/lib/ZigbeeLocal.mts": "b229c65869e3a53aa86bb5330b97a99c8960ce2e0fdb12df9635c8f252d471cf",
+    "/app/packages/homey-local/lib/VirtualDeviceHomeyBridgeLocal.mts": "99216fad148c54ddb4d87d5a79d3b8a5b05dbf10ef32819e8579b689b6574ade"
+  }
+}

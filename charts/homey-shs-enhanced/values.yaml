@@ -1,0 +1,144 @@
+# Homey Self-Hosted Server — Enhanced Edition.
+#
+# The image is the one you build from this repo. The chart refuses to install without
+# image.repository, because there is no public image to fall back on — distributing one
+# would violate Athom's copyright (see the licensing note in the repo README).
+
+image:
+  # Required. Your own registry, e.g. registry.example.com/homey-shs-enhanced.
+  repository: ""
+  # Empty = the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# That registry will be private, so you will usually need one of these:
+#   kubectl create secret docker-registry regcred \
+#     --docker-server=... --docker-username=... --docker-password=...
+imagePullSecrets: []
+#  - name: regcred
+
+nameOverride: ""
+fullnameOverride: ""
+
+homey:
+  # The address the server advertises to the mobile app, Homey Bridges and WebRTC
+  # (patch 0006: startup banner, getInfo, the ipInternal pushed to Athom's cloud, and
+  # the first ICE candidate). Set it to the address the LAN actually reaches this
+  # install on — typically the LoadBalancer IP. Empty keeps upstream's
+  # outbound-interface probe, which inside a pod yields the useless pod IP.
+  localAddress: ""
+  # Patch 0003: exit 1 when dbus, avahi, the Matter daemon, rrdcached or go2rtc
+  # exhausts its restart budget, so Kubernetes restarts the pod instead of leaving a
+  # dead daemon behind green probes. Turn this off only under hostNetwork on a node
+  # that already runs an mDNS daemon — there the avahi port clash would crash-loop the
+  # pod, and running without mDNS is the lesser evil.
+  exitOnServiceFailure: true
+  # Sets TZ. Empty = UTC.
+  timezone: ""
+
+# mDNS, SSDP, ARP discovery and Matter are link-local: for those the pod must sit on
+# the home LAN, which in Kubernetes means hostNetwork on a LAN-attached node (macvlan
+# via Multus works too, outside this chart's scope). The default keeps the pod inside
+# the cluster network: UI, API, app connectivity via homey.localAddress, Homey Bridge
+# satellites and WebRTC all work through the Service; discovery does not. Thread
+# routing additionally needs three sysctls set on the node itself — patch 0002 prints
+# the exact list at startup rather than failing silently.
+hostNetwork: false
+
+# Enhancement 0001: drive an Ember/EZSP USB coordinator (e.g. Home Assistant Connect
+# ZBT-2) directly — no Homey Bridge. Inert when disabled.
+zigbee:
+  enabled: false
+  # Where the coordinator is; the form decides the privileges:
+  #   tcp://192.168.1.10:9998     serial-over-TCP (ser2net/socat wherever the stick
+  #                               is plugged in) — no extra privileges at all
+  #   /dev/serial/by-id/usb-...   USB device on the node: hostPath mount, and the
+  #                               container becomes privileged — pin the pod to that
+  #                               node via nodeSelector
+  device: ""
+  # The unprivileged alternative for USB: a device-plugin resource that exposes the
+  # stick (e.g. squat.ai/serial from the generic-device-plugin). `device` is then the
+  # path the plugin mounts inside the container.
+  deviceResource: ""
+  # Empty = the enhancement's defaults: 460800 baud, RTS/CTS on, channel 11 (channel
+  # matters only for the first network formation).
+  baudrate: ""
+  rtscts: ""
+  channel: ""
+
+service:
+  # LoadBalancer is the practical choice on a home cluster: one LAN IP for the app,
+  # Homey Bridges and WebRTC — pair it with homey.localAddress set to that IP.
+  type: ClusterIP
+  # Provider-specific pinning, e.g. metallb.io/loadBalancerIPs.
+  annotations: {}
+
+# HTTP UI/API only; the mobile app and Homey Bridges talk to the Service ports, not
+# the Ingress.
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: ""
+  tls: []
+  #  - secretName: homey-tls
+  #    hosts: [homey.example.com]
+
+# /homey/user is the entire state: database, activation, apps, Matter and Zigbee
+# networks. Patch 0001 makes the server exit rather than run without a volume there,
+# and the chart is equally strict — there is no emptyDir escape hatch. The PVC carries
+# helm.sh/resource-policy: keep, so helm uninstall leaves the state behind.
+persistence:
+  size: 5Gi
+  # "" = the cluster default class, "-" = disable dynamic provisioning.
+  storageClass: ""
+  accessModes: [ReadWriteOnce]
+  annotations: {}
+  # Bring your own claim instead of the chart's:
+  existingClaim: ""
+
+resources:
+  # Patch 0004 makes the server respect the cgroup limit: the app memory guard sheds
+  # apps before the kernel OOM-kills the whole server. Keep the limit at 1Gi or more —
+  # below that the 150 MB low-memory threshold engages constantly.
+  limits:
+    memory: 2Gi
+  requests:
+    cpu: 250m
+    memory: 512Mi
+
+# The verified-minimal profile. The image must run as root (dbus and avahi start as
+# root and shed privileges themselves), but nothing more: every capability is dropped
+# except the five below — each one individually proven necessary — escalation is off,
+# the root filesystem is read-only (/run and /tmp become emptyDirs automatically), and
+# the seccomp default applies.
+#   SETUID/SETGID  dbus and avahi dropping to their service users
+#   SYS_CHROOT     avahi's chroot jail
+#   CHOWN          avahi handing its runtime directory to the avahi user
+#   KILL           the supervisor signalling those de-privileged daemons — without it
+#                  every shutdown hangs into the SIGKILL timeout and skips the final
+#                  state writes
+# Python-runtime apps additionally need SYS_ADMIN in `add` for their bind-mount jail —
+# patch 0007 turns the missing capability into an actionable error instead of a crash
+# loop, so you will know if you need it.
+securityContext:
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  seccompProfile:
+    type: RuntimeDefault
+  capabilities:
+    drop: [ALL]
+    add: [SETUID, SETGID, SYS_CHROOT, CHOWN, KILL]
+
+podSecurityContext: {}
+
+# Extra EnvVar objects, verbatim. Patched-in knobs with no first-class value above:
+# PORT_GO2RTC_API / PORT_GO2RTC_RTSP (patch 0005), MATTER_MDNS_INTERFACES (0002),
+# ATHOM_OTA_API_BASEURL (0008), and upstream's DEBUG.
+extraEnv: []
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

@@ -1,0 +1,24 @@
+{{- if not .Values.persistence.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "homey-shs-enhanced.fullname" . }}
+  labels:
+    {{- include "homey-shs-enhanced.labels" . | nindent 4 }}
+  annotations:
+    # This claim is the Homey's entire state — database, activation, apps, Matter and
+    # Zigbee networks. It deliberately survives helm uninstall.
+    helm.sh/resource-policy: keep
+    {{- with .Values.persistence.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  accessModes:
+    {{- toYaml .Values.persistence.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size | quote }}
+  {{- with .Values.persistence.storageClass }}
+  storageClassName: {{ if eq "-" . }}""{{ else }}{{ . | quote }}{{ end }}
+  {{- end }}
+{{- end }}

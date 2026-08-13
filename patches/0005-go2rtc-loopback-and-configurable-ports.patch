@@ -1,0 +1,42 @@
+--- a/packages/homey-local/lib/Go2rtcDaemon.mts
++++ b/packages/homey-local/lib/Go2rtcDaemon.mts
+@@ -107,11 +107,11 @@
+ modules: [api, ws, rtsp, webrtc, mp4, hls, mjpeg, hass, onvif, homekit, http]
+ 
+ api:
+-  listen: "${this.logToStdio ? '' : '127.0.0.1'}:${this.apiPort}"
++  listen: "127.0.0.1:${this.apiPort}"
+   origin: "*"
+ 
+ rtsp:
+-  listen: "${this.logToStdio ? '' : '127.0.0.1'}:${this.rtspPort}"
++  listen: "127.0.0.1:${this.rtspPort}"
+ 
+ webrtc:
+   listen: ":${this.webrtcPort}"
+--- a/apps/homey-shs/config.mts
++++ b/apps/homey-shs/config.mts
+@@ -44,6 +44,10 @@
+   GO2RTC_LOG_STDIO: z.preprocess((val) => val === '1', z.boolean().default(false)),
+   HOMEY_EXIT_ON_SERVICE_FAILURE: z.preprocess((val) => val === '1', z.boolean().default(false)),
+   PORT_SERVER_WEBRTC: z.preprocess((val) => (val != null ? Number(val) : 8555), z.number()),
++  // go2rtc's API and RTSP listeners, loopback only. 1984 and 8554 are also Frigate's
++  // defaults, which collide under host networking.
++  PORT_GO2RTC_API: z.preprocess((val) => (val != null ? Number(val) : 1984), z.number()),
++  PORT_GO2RTC_RTSP: z.preprocess((val) => (val != null ? Number(val) : 8554), z.number()),
+ 
+   HOMEY_LOG_DIR: z.string().optional().default(DEFAULT_HOMEY_LOG_DIR),
+   HOMEY_LOG_FILENAME: z.string().optional().default('homey.log'),
+--- a/apps/homey-shs/index.mts
++++ b/apps/homey-shs/index.mts
+@@ -64,8 +64,8 @@
+ const go2rtcDaemon = new Go2rtcDaemon({
+   binaryPath: config.HOMEY_GO2RTC_PATH,
+   configDir: config.HOMEY_GO2RTC_CONFIG_DIR,
+-  apiPort: 1984,
+-  rtspPort: 8554,
++  apiPort: config.PORT_GO2RTC_API,
++  rtspPort: config.PORT_GO2RTC_RTSP,
+   webrtcPort: config.PORT_SERVER_WEBRTC,
+   logToStdio: config.GO2RTC_LOG_STDIO,
+ });

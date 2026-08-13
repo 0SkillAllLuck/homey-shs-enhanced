@@ -1,0 +1,26 @@
+# Example: Homey SHS Enhanced with a directly attached Ember/EZSP USB coordinator.
+#
+#   ls -l /dev/serial/by-id/
+#   ZIGBEE_DEVICE=/dev/serial/by-id/usb-Nabu_Casa_Connect_ZBT-2_... docker compose up -d
+#
+# The placeholder device path intentionally does not exist; set ZIGBEE_DEVICE to the
+# stable by-id path of the coordinator before the first `docker compose up`.
+services:
+  homey-shs:
+    image: ${HOMEY_SHS_IMAGE:-homey-shs-enhanced:13.4.0}
+    network_mode: host
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    security_opt:
+      - systempaths=unconfined
+    environment:
+      HOMEY_ZIGBEE_BACKEND: ember
+      HOMEY_ZIGBEE_DEVICE: /dev/zigbee
+      HOMEY_ZIGBEE_BAUDRATE: ${HOMEY_ZIGBEE_BAUDRATE:-460800}
+      HOMEY_ZIGBEE_RTSCTS: ${HOMEY_ZIGBEE_RTSCTS:-true}
+      HOMEY_ZIGBEE_CHANNEL: ${HOMEY_ZIGBEE_CHANNEL:-11}
+    devices:
+      - ${ZIGBEE_DEVICE:-/dev/serial/by-id/CHANGE_ME}:/dev/zigbee
+    volumes:
+      - ./data:/homey/user

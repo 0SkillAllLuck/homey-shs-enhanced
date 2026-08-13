@@ -1,0 +1,105 @@
+--- a/packages/homey-local/lib/MatterDaemon.mts
++++ b/packages/homey-local/lib/MatterDaemon.mts
+@@ -37,6 +37,7 @@
+    */
+   private readonly ethernetInterface?: string;
+   private readonly wirelessInterface?: string;
++  private readonly mdnsInterfaces?: string;
+   private readonly paaPath: string;
+   private readonly userPath: string;
+   private readonly unixSocketPath: string;
+@@ -48,10 +49,21 @@
+ 
+   public readonly dcl: DclClient;
+ 
++  /** Returns whether the value ended up correct -- setSysctl() never rejects. */
+   private async setSysctl(ctl: string, value: number, { allowGreaterThan = false } = {}) {
+-    await setSysctl(ctl, value, { allowGreaterThan })
+-      .then((result) => this.debug(`${ctl}=${result.value} (${value})`))
+-      .catch((err) => this.debug(`Failed to set ${ctl}=${value}: ${getErrorMessage(err)}`));
++    const result = await setSysctl(ctl, value, { allowGreaterThan });
++
++    if (result.success === true) {
++      this.debug(`${ctl}=${result.value} (${value})`);
++      return true;
++    }
++
++    this.debug(
++      `Failed to set ${ctl}=${value} (currently ${result.value ?? 'unreadable'}): ` +
++        getErrorMessage(result.error),
++    );
++
++    return false;
+   }
+ 
+   constructor({
+@@ -100,6 +112,7 @@
+ 
+     this.ethernetInterface = HOMEY_ETHERNET_INTERFACE;
+     this.wirelessInterface = HOMEY_WIRELESS_INTERFACE;
++    this.mdnsInterfaces = MATTER_MDNS_INTERFACES;
+     this.paaPath = HOMEY_MATTER_PAA_PATH;
+     this.userPath = HOMEY_MATTER_USERDATA_PATH;
+     this.unixSocketPath = MATTER_UNIX_SOCKET_PATH;
+@@ -161,22 +174,55 @@
+       }
+ 
+       // If no interfaces are known, enable on all external interfaces.
+-      return Object.entries(os.networkInterfaces())
++      const external = Object.entries(os.networkInterfaces())
+         .filter(([_, addresses]) => addresses?.some((addr) => addr.internal === false))
+         .map(([name]) => name);
++
++      // Under host networking these sysctl writes reach docker0 and every other
++      // container's veth; honour the allowlist when given, otherwise skip the obvious
++      // non-uplinks.
++      const allowList = (this.mdnsInterfaces ?? '')
++        .split(',')
++        .map((name) => name.trim())
++        .filter((name) => name.length > 0);
++
++      if (allowList.length > 0) {
++        return external.filter((name) => allowList.includes(name));
++      }
++
++      return external.filter((name) => /^(docker|veth|br-)/.test(name) === false);
+     })();
+ 
+     // Enable IPv6 & IPv6 RA on interfaces. Without IPv6 RA enabled, we cannot send messages to Thread devices.
+     // Because the OS won't register routes for the IPv6 prefixes.
+     // Include default for interfaces that are added later.
++    const results: boolean[] = [];
++
+     for (const interfaceName of ['default', ...interfaces]) {
+-      await this.setSysctl(`net.ipv6.conf.${interfaceName}.disable_ipv6`, 0);
+-      await this.setSysctl(`net.ipv6.conf.${interfaceName}.accept_ra`, 2);
+-      await this.setSysctl(`net.ipv6.conf.${interfaceName}.accept_ra_rt_info_max_plen`, 64, {
+-        allowGreaterThan: true,
+-      });
++      results.push(await this.setSysctl(`net.ipv6.conf.${interfaceName}.disable_ipv6`, 0));
++      results.push(await this.setSysctl(`net.ipv6.conf.${interfaceName}.accept_ra`, 2));
++      results.push(
++        await this.setSysctl(`net.ipv6.conf.${interfaceName}.accept_ra_rt_info_max_plen`, 64, {
++          allowGreaterThan: true,
++        }),
++      );
+     }
+ 
++    const failed = results.filter((ok) => ok === false).length;
++
++    if (failed > 0) {
++      // console.error, not this.debug: the warning must not depend on the DEBUG
++      // namespaces. Bounded by the daemon's autoRestartLimit.
++      console.error(
++        `[matter] ${failed} IPv6 sysctl write(s) failed -- /proc/sys is read-only here. ` +
++          'Thread devices will be unreachable, because the kernel will not install routes ' +
++          'from router advertisements. Either grant CAP_NET_ADMIN and run with ' +
++          '--security-opt systempaths=unconfined, or set net.ipv6.conf.all.accept_ra=2, ' +
++          'net.ipv6.conf.all.disable_ipv6=0 and ' +
++          'net.ipv6.conf.all.accept_ra_rt_info_max_plen=64 on the host and ignore this.',
++      );
++    }
++
+     await fs.promises.rm(this.unixSocketPath).catch(noop);
+ 
+     await fs.promises.mkdir(this.paaPath, { recursive: true });

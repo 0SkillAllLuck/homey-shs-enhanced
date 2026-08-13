@@ -1,0 +1,15 @@
+# Anchored allowlist: /* only matches top-level entries, so the negated directories'
+# contents stay includable (an unanchored * would ignore them beyond re-inclusion).
+/*
+!/charts/
+!/enhancements/
+!/patches/
+!/.dockerignore
+!/.gitignore
+!/Dockerfile
+!/LICENSE
+!/README.md
+
+# Local installs inside an enhancement; the image gets its own via npm ci
+enhancements/*/node_modules/
+.DS_Store

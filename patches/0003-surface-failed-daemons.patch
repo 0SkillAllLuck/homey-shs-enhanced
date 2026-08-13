@@ -1,0 +1,44 @@
+--- a/apps/homey-shs/config.mts
++++ b/apps/homey-shs/config.mts
+@@ -42,6 +42,7 @@
+   AVAHI_DAEMON_LOG_STDIO: z.preprocess((val) => val === '1', z.boolean().default(false)),
+   DBUS_DAEMON_LOG_STDIO: z.preprocess((val) => val === '1', z.boolean().default(false)),
+   GO2RTC_LOG_STDIO: z.preprocess((val) => val === '1', z.boolean().default(false)),
++  HOMEY_EXIT_ON_SERVICE_FAILURE: z.preprocess((val) => val === '1', z.boolean().default(false)),
+   PORT_SERVER_WEBRTC: z.preprocess((val) => (val != null ? Number(val) : 8555), z.number()),
+ 
+   HOMEY_LOG_DIR: z.string().optional().default(DEFAULT_HOMEY_LOG_DIR),
+--- a/apps/homey-shs/index.mts
++++ b/apps/homey-shs/index.mts
+@@ -7,6 +7,7 @@
+ import { getErrorMessage, noop } from '@athombv/homey-core';
+ import {
+   Avahi,
++  ChildProcessService,
+   DBus,
+   Go2rtcDaemon,
+   MatterDaemon,
+@@ -69,6 +70,23 @@
+   logToStdio: config.GO2RTC_LOG_STDIO,
+ });
+ 
++// Called when a daemon exhausts its restart budget and stays down for good. The server
++// and its health probes keep running regardless, so report via console.error, which
++// does not depend on the DEBUG namespaces.
++ChildProcessService.globalHooks.onStartFailure = (service, attempts) => {
++  console.error(
++    `Service ${service.constructor.name} gave up after ${attempts} failed restarts. ` +
++      'It will not be restarted; the server continues in a degraded state.',
++  );
++
++  // Off by default: a host with UDP 5353 already bound would crash-loop the whole
++  // server instead of running without mDNS.
++  if (config.HOMEY_EXIT_ON_SERVICE_FAILURE === true) {
++    console.error('HOMEY_EXIT_ON_SERVICE_FAILURE=1 -- exiting so the restart policy can recover.');
++    process.exit(1);
++  }
++};
++
+ // 1b. Start Daemons.
+ try {
+   await dbusDaemon.start();

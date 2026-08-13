@@ -1,0 +1,60 @@
+--- a/apps/homey-shs/stdio-log.mts
++++ b/apps/homey-shs/stdio-log.mts
+@@ -1,7 +1,7 @@
+ import fs from 'node:fs';
+ import path from 'node:path';
+ 
+-import { getHomeyLogPath } from './lib/getHomeyLogPath.mts';
++import { DEFAULT_HOMEY_LOG_DIR, getHomeyLogPath } from './lib/getHomeyLogPath.mts';
+ 
+ const logPath = getHomeyLogPath();
+ 
+@@ -23,7 +23,17 @@
+ 
+ const writeQueue: QueueItem[] = [];
+ 
+-fs.mkdirSync(path.dirname(logPath), { recursive: true });
++// Preloaded via --import, so this runs before index.mts. Creating the default log
++// directory here would create /homey/user itself and defeat index.mts's missing-mount
++// check -- skip it, and file logging, until the mount exists.
++const usesDefaultLogDir = process.env.HOMEY_LOG_PATH == null && process.env.HOMEY_LOG_DIR == null;
++
++if (usesDefaultLogDir === true && fs.existsSync(path.dirname(DEFAULT_HOMEY_LOG_DIR)) === false) {
++  // Leave stdout/stderr alone; index.mts reports the missing mount and exits.
++  fileEnabled = false;
++} else {
++  fs.mkdirSync(path.dirname(logPath), { recursive: true });
++}
+ 
+ function getFileSize(): number {
+   try {
+--- a/apps/homey-shs/index.mts
++++ b/apps/homey-shs/index.mts
+@@ -28,6 +28,15 @@
+ // Log to console so it shows up in the inspector devtools.
+ debug.log = console.info.bind(console);
+ 
++// Must run before the daemons start below: they create their own directories under
++// /homey/user, which would recreate a missing mount point and defeat this check.
++if (fs.existsSync(config.HOMEY_USER_PATH) === false) {
++  console.error(`Missing required mount: ${config.HOMEY_USER_PATH}`);
++  console.error('All persistent state lives there: database, activation, apps and Matter data.');
++  console.error(`Mount a volume, e.g. docker run -v /my/data:${config.HOMEY_USER_PATH} ...`);
++  process.exit(1);
++}
++
+ // 1a. Init Daemons
+ const dbusDaemon = new DbusDaemon({
+   DBUS_DAEMON_LOG_STDIO: config.DBUS_DAEMON_LOG_STDIO,
+@@ -112,11 +121,6 @@
+   },
+ });
+ 
+-if (fs.existsSync(config.HOMEY_USER_PATH) === false) {
+-  console.error(`Missing required mount: ${config.HOMEY_USER_PATH}`);
+-  process.exit(1);
+-}
+-
+ server.start().catch((error) => {
+   console.error('Error during startup:', error);
+ });

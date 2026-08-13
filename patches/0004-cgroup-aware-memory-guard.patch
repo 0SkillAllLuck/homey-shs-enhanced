@@ -1,0 +1,178 @@
+--- a/packages/homey-local/lib/HomeyUtilLocal.mjs
++++ b/packages/homey-local/lib/HomeyUtilLocal.mjs
+@@ -97,7 +97,7 @@
+    */
+   static async getMemoryInfo() {
+     const meminfo = await fs.promises.readFile('/proc/meminfo', 'utf8');
+-    return meminfo
++    const parsed = meminfo
+       .trim()
+       .split('\n')
+       .reduce((result, line) => {
+@@ -110,8 +110,143 @@
+           [name]: Number.parseInt(value, 10) * 1024, // Bytes
+         };
+       }, {});
++
++    return this.applyCgroupMemoryLimit(parsed);
+   }
+ 
++  /**
++   * Reads this process's memory cgroup limit and usage.
++   * Returns null when there is no limit, or when nothing can be read.
++   * @returns {Promise<null | { limit: number; current: number; inactiveFile: number;
++   *   swapLimit: number | null; swapCurrent: number }>}
++   */
++  static async getCgroupMemoryInfo() {
++    /** Returns null for "unlimited", throws when the file cannot be read. */
++    const readNumber = async (p) => {
++      const raw = (await fs.promises.readFile(p, 'utf8')).trim();
++
++      if (raw === 'max') return null;
++
++      const value = Number.parseInt(raw, 10);
++
++      // cgroup v1 spells "no limit" as a value close to 2^63.
++      if (Number.isFinite(value) === false || value <= 0 || value >= Number.MAX_SAFE_INTEGER) {
++        return null;
++      }
++
++      return value;
++    };
++
++    const readStat = async (p, key) => {
++      try {
++        const raw = await fs.promises.readFile(p, 'utf8');
++
++        for (const line of raw.split('\n')) {
++          const [name, value] = line.split(' ');
++          if (name === key) return Number.parseInt(value, 10) || 0;
++        }
++      } catch {
++        // fall through
++      }
++
++      return 0;
++    };
++
++    // cgroup v2
++    try {
++      const limit = await readNumber('/sys/fs/cgroup/memory.max');
++
++      if (limit == null) return null;
++
++      const current = await readNumber('/sys/fs/cgroup/memory.current');
++
++      let swapLimit = null;
++      let swapCurrent = 0;
++
++      try {
++        swapLimit = await readNumber('/sys/fs/cgroup/memory.swap.max');
++        swapCurrent = (await readNumber('/sys/fs/cgroup/memory.swap.current')) ?? 0;
++      } catch {
++        // Swap accounting is not enabled; leave the host swap values alone.
++      }
++
++      return {
++        limit,
++        current: current ?? 0,
++        inactiveFile: await readStat('/sys/fs/cgroup/memory.stat', 'inactive_file'),
++        swapLimit,
++        swapCurrent,
++      };
++    } catch {
++      // Not cgroup v2, or not readable -- try v1.
++    }
++
++    try {
++      const limit = await readNumber('/sys/fs/cgroup/memory/memory.limit_in_bytes');
++
++      if (limit == null) return null;
++
++      const current = await readNumber('/sys/fs/cgroup/memory/memory.usage_in_bytes');
++
++      return {
++        limit,
++        current: current ?? 0,
++        inactiveFile: await readStat('/sys/fs/cgroup/memory/memory.stat', 'total_inactive_file'),
++        // memsw accounting is rarely enabled; not clamped.
++        swapLimit: null,
++        swapCurrent: 0,
++      };
++    } catch {
++      return null;
++    }
++  }
++
++  /**
++   * Clamps host-wide /proc/meminfo values to this process's memory cgroup --
++   * /proc/meminfo is not namespaced and over-reports inside a limited container.
++   * Anything unreadable, or no limit at all, returns the input untouched.
++   */
++  static async applyCgroupMemoryLimit(meminfo) {
++    const cgroup = await this.getCgroupMemoryInfo();
++
++    if (cgroup == null) {
++      return meminfo;
++    }
++
++    // inactive_file is reclaimable page cache. The kubelet excludes it from the working
++    // set for the same reason: counting it as used would trigger false app kills.
++    const available = Math.max(0, cgroup.limit - cgroup.current + cgroup.inactiveFile);
++    const result = { ...meminfo };
++
++    if (typeof result.MemTotal === 'number') {
++      result.MemTotal = Math.min(result.MemTotal, cgroup.limit);
++    }
++
++    if (typeof result.MemAvailable === 'number') {
++      result.MemAvailable = Math.min(result.MemAvailable, available);
++    }
++
++    if (typeof result.MemFree === 'number') {
++      result.MemFree = Math.min(result.MemFree, available);
++    }
++
++    // App start gating uses MemAvailable + SwapFree, so an unclamped SwapFree would
++    // reintroduce the same over-estimate.
++    if (cgroup.swapLimit != null) {
++      const swapFree = Math.max(0, cgroup.swapLimit - cgroup.swapCurrent);
++
++      if (typeof result.SwapTotal === 'number') {
++        result.SwapTotal = Math.min(result.SwapTotal, cgroup.swapLimit);
++      }
++
++      if (typeof result.SwapFree === 'number') {
++        result.SwapFree = Math.min(result.SwapFree, swapFree);
++      }
++    }
++
++    return result;
++  }
++
+   static getBitAt(value, position) {
+     return !!((value >> position) & 1);
+   }
+--- a/packages/homey-local/lib/ManagerSystemLocal.mjs
++++ b/packages/homey-local/lib/ManagerSystemLocal.mjs
+@@ -292,6 +292,9 @@
+   async getInfo() {
+     const { rebootReason, bootDate } = await this.getState();
+ 
++    // os.totalmem()/os.freemem() are not cgroup-aware; report the clamped values instead.
++    const { MemTotal, MemAvailable } = await HomeyUtilLocal.getMemoryInfo();
++
+     return {
+       ...(await super.getInfo()),
+       rebootReason,
+@@ -304,8 +307,8 @@
+       // System
+       nodeVersion: process.version,
+       hostname: `homey-${this.homey.id}.local`,
+-      totalmem: os.totalmem(),
+-      freemem: os.freemem(),
++      totalmem: MemTotal ?? os.totalmem(),
++      freemem: MemAvailable ?? os.freemem(),
+       loadavg: os.loadavg(),
+       uptime: os.uptime(),
+       cpus: os.cpus(),

@@ -1,0 +1,190 @@
+{{- $z := .Values.zigbee }}
+{{- if and $z.enabled (not $z.device) }}
+{{- fail "zigbee.enabled needs zigbee.device: a tcp://host:port serial bridge, a /dev/serial/by-id/... path on the node, or the in-container path a device plugin exposes (with zigbee.deviceResource)" }}
+{{- end }}
+{{- /* A /dev path without a device plugin means a privileged hostPath mount. */}}
+{{- $zigbeeUSB := and $z.enabled (hasPrefix "/" $z.device) (not $z.deviceResource) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "homey-shs-enhanced.fullname" . }}
+  labels:
+    {{- include "homey-shs-enhanced.labels" . | nindent 4 }}
+spec:
+  # One server per state volume, ever — two instances on the same database corrupt it.
+  # Recreate guarantees the old pod has released /homey/user before the new one mounts.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "homey-shs-enhanced.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "homey-shs-enhanced.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      # The server never talks to the Kubernetes API, and injected service-link env
+      # vars have no business near a zod-validated environment.
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- if .Values.hostNetwork }}
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: homey-shs
+          image: {{ include "homey-shs-enhanced.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if $zigbeeUSB }}
+          # A host character device needs the device cgroup, which only privileged
+          # grants without a device plugin. Set zigbee.deviceResource (or a tcp://
+          # bridge) to keep the hardened profile instead.
+          securityContext:
+            privileged: true
+            readOnlyRootFilesystem: {{ .Values.securityContext.readOnlyRootFilesystem | default false }}
+          {{- else }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: 4859
+              protocol: TCP
+            - name: https
+              containerPort: 4860
+              protocol: TCP
+            - name: bridge
+              containerPort: 4861
+              protocol: TCP
+            - name: energy
+              containerPort: 4862
+              protocol: TCP
+            - name: webrtc-tcp
+              containerPort: 8555
+              protocol: TCP
+            - name: webrtc-udp
+              containerPort: 8555
+              protocol: UDP
+            - name: mdns
+              containerPort: 5353
+              protocol: UDP
+          env:
+            {{- if .Values.homey.exitOnServiceFailure }}
+            - name: HOMEY_EXIT_ON_SERVICE_FAILURE
+              value: "1"
+            {{- end }}
+            {{- with .Values.homey.timezone }}
+            - name: TZ
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.homey.localAddress }}
+            - name: HOMEY_LOCAL_ADDRESS
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if $z.enabled }}
+            - name: HOMEY_ZIGBEE_BACKEND
+              value: ember
+            - name: HOMEY_ZIGBEE_DEVICE
+              value: {{ $zigbeeUSB | ternary "/dev/zigbee" $z.device | quote }}
+            {{- with $z.baudrate }}
+            - name: HOMEY_ZIGBEE_BAUDRATE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $z.rtscts }}
+            - name: HOMEY_ZIGBEE_RTSCTS
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $z.channel }}
+            - name: HOMEY_ZIGBEE_CHANNEL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          # GET / answers 302 before activation and after, so one probe covers both
+          # states (3xx counts as success for httpGet probes).
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 10
+          {{- if $z.deviceResource }}
+          resources:
+            {{- toYaml (mustMergeOverwrite (deepCopy .Values.resources) (dict "limits" (dict $z.deviceResource 1))) | nindent 12 }}
+          {{- else }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /homey/user
+            {{- if .Values.securityContext.readOnlyRootFilesystem }}
+            # Everything the daemons write outside /homey/user: dbus and avahi
+            # sockets, the generated go2rtc config (/run), and scratch space.
+            - name: run
+              mountPath: /run
+            - name: tmp
+              mountPath: /tmp
+            {{- end }}
+            {{- if $zigbeeUSB }}
+            - name: zigbee
+              mountPath: /dev/zigbee
+            {{- end }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "homey-shs-enhanced.claimName" . }}
+        {{- if .Values.securityContext.readOnlyRootFilesystem }}
+        - name: run
+          emptyDir:
+            medium: Memory
+        - name: tmp
+          emptyDir: {}
+        {{- end }}
+        {{- if $zigbeeUSB }}
+        - name: zigbee
+          hostPath:
+            path: {{ $z.device }}
+            type: CharDevice
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

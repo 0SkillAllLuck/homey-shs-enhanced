@@ -1,0 +1,96 @@
+--- /dev/null
++++ b/packages/homey-local/lib/HomeyErrorMissingSysAdminCapability.mts
+@@ -0,0 +1,12 @@
++import { HomeyErrorPreconditionRequired } from '@athombv/homey-core';
++
++export default class HomeyErrorMissingSysAdminCapability extends HomeyErrorPreconditionRequired {
++  constructor(
++    message = 'Python apps need CAP_SYS_ADMIN to set up their sandbox. ' +
++      'Add --cap-add SYS_ADMIN (Docker) or capabilities.add: ["SYS_ADMIN"] (Kubernetes). ' +
++      'On hosts with AppArmor you may also need --security-opt apparmor=unconfined.',
++    options?: ErrorOptions,
++  ) {
++    super(message, options);
++  }
++}
+--- a/packages/homey-local/lib/HomeyUtilLocal.mjs
++++ b/packages/homey-local/lib/HomeyUtilLocal.mjs
+@@ -249,6 +249,24 @@
+ 
+   static getBitAt(value, position) {
+     return !!((value >> position) & 1);
++  }
++
++  /**
++   * Whether this process holds CAP_SYS_ADMIN (capability bit 21).
++   * Fails open: an unreadable or unparseable /proc/self/status returns true, so a working
++   * setup can never be blocked by this check. CapEff is a 64-bit mask, hence BigInt.
++   */
++  static async hasCapSysAdmin() {
++    try {
++      const status = await fs.promises.readFile('/proc/self/status', 'utf8');
++      const match = status.match(/^CapEff:\s*([0-9a-fA-F]+)$/m);
++
++      if (match == null) return true;
++
++      return ((BigInt(`0x${match[1]}`) >> 21n) & 1n) === 1n;
++    } catch {
++      return true;
++    }
+   }
+ 
+   static async readlineFromRemote(host, port) {
+--- a/packages/homey-local/lib/AppLocal.mts
++++ b/packages/homey-local/lib/AppLocal.mts
+@@ -38,6 +38,7 @@
+   withResolvers,
+ } from '@athombv/homey-core';
+ 
++import HomeyErrorMissingSysAdminCapability from './HomeyErrorMissingSysAdminCapability.mts';
+ import HomeyErrorOutOfMemory from './HomeyErrorOutOfMemory.mts';
+ import type { HomeyLocal } from './HomeyLocal.mts';
+ import { HomeyUtilLocal } from './HomeyUtilLocal.mjs';
+@@ -1093,6 +1094,12 @@
+             break;
+ 
+           case APP_RUNTIMES.PYTHON: {
++            // The bind mounts below need CAP_SYS_ADMIN; check up front so the failure is
++            // actionable instead of a bare mount errno and an endless restart loop.
++            if ((await HomeyUtilLocal.hasCapSysAdmin()) === false) {
++              throw new HomeyErrorMissingSysAdminCapability();
++            }
++
+             try {
+               // Mount system folders to the chroot-jail
+               for (const [mountSource, mountDestination] of this.homey.config
+@@ -1111,8 +1118,13 @@
+                 try {
+                   await HomeyUtilLocal.exec(`/bin/mount -rB ${mountSource} ${mountPath}`);
+                 } catch (err: unknown) {
+-                  const code = (err as { code: unknown }).code as number;
+-                  throw new Error(`Could not mount ${mountSource} : ${code}`);
++                  const { code, stderr } = err as { code?: unknown; stderr?: unknown };
++                  // mount's own stderr is the only clue when the capability is present but
++                  // the mount is still denied -- an AppArmor profile, typically.
++                  const detail = typeof stderr === 'string' && stderr.trim().length > 0
++                    ? ` (${stderr.trim()})`
++                    : '';
++                  throw new Error(`Could not mount ${mountSource} : ${code}${detail}`);
+                 }
+               }
+             } catch (e) {
+@@ -1334,11 +1346,14 @@
+ 
+       let stack = err instanceof Error ? (err.stack ?? 'No Stack') : 'No Stack';
+       if (err instanceof HomeyErrorOutOfMemory) stack = err.message;
++      if (err instanceof HomeyErrorMissingSysAdminCapability) stack = err.message;
+ 
+       if (onCrashCalled !== true) {
+         this.onCrash({
+           stack,
+           report: false,
++          // A missing capability cannot fix itself, so restarting is pure noise.
++          restart: err instanceof HomeyErrorMissingSysAdminCapability ? false : undefined,
+         }).catch((err) => this.error(`App.onCrash Error: ${getErrorMessage(err)}`));
+       }
+ 
