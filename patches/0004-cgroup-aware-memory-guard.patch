@@ -9,7 +9,7 @@
        .trim()
        .split('\n')
        .reduce((result, line) => {
-@@ -110,8 +110,143 @@
+@@ -110,8 +110,181 @@
            [name]: Number.parseInt(value, 10) * 1024, // Bytes
          };
        }, {});
@@ -17,6 +17,42 @@
 +    return this.applyCgroupMemoryLimit(parsed);
    }
  
++  /**
++   * Resolves the /sys/fs/cgroup directories holding this process's memory
++   * files. Inside a private cgroup namespace /proc/self/cgroup reads "0::/"
++   * and the mount root is already the right place; in the host namespace
++   * (e.g. Kubernetes without cgroupns isolation) it holds the full
++   * host-relative path, which must be appended to reach this cgroup's
++   * memory.max.
++   * @returns {Promise<{ v2: string; v1: string }>}
++   */
++  static async getCgroupMemoryPaths() {
++    let v2 = '/sys/fs/cgroup';
++    let v1 = '/sys/fs/cgroup/memory';
++
++    try {
++      const lines = (await fs.promises.readFile('/proc/self/cgroup', 'utf8'))
++        .trim()
++        .split('\n');
++
++      for (const line of lines) {
++        const [id, controllers, cgroupPath] = line.split(':');
++
++        if (!cgroupPath || cgroupPath === '/') continue;
++
++        if (id === '0' && controllers === '') {
++          v2 += cgroupPath;
++        } else if (controllers && controllers.split(',').includes('memory')) {
++          v1 += cgroupPath;
++        }
++      }
++    } catch {
++      // No readable /proc/self/cgroup; assume the mount roots.
++    }
++
++    return { v2, v1 };
++  }
++
 +  /**
 +   * Reads this process's memory cgroup limit and usage.
 +   * Returns null when there is no limit, or when nothing can be read.
@@ -55,20 +91,22 @@
 +      return 0;
 +    };
 +
++    const paths = await this.getCgroupMemoryPaths();
++
 +    // cgroup v2
 +    try {
-+      const limit = await readNumber('/sys/fs/cgroup/memory.max');
++      const limit = await readNumber(`${paths.v2}/memory.max`);
 +
 +      if (limit == null) return null;
 +
-+      const current = await readNumber('/sys/fs/cgroup/memory.current');
++      const current = await readNumber(`${paths.v2}/memory.current`);
 +
 +      let swapLimit = null;
 +      let swapCurrent = 0;
 +
 +      try {
-+        swapLimit = await readNumber('/sys/fs/cgroup/memory.swap.max');
-+        swapCurrent = (await readNumber('/sys/fs/cgroup/memory.swap.current')) ?? 0;
++        swapLimit = await readNumber(`${paths.v2}/memory.swap.max`);
++        swapCurrent = (await readNumber(`${paths.v2}/memory.swap.current`)) ?? 0;
 +      } catch {
 +        // Swap accounting is not enabled; leave the host swap values alone.
 +      }
@@ -76,7 +114,7 @@
 +      return {
 +        limit,
 +        current: current ?? 0,
-+        inactiveFile: await readStat('/sys/fs/cgroup/memory.stat', 'inactive_file'),
++        inactiveFile: await readStat(`${paths.v2}/memory.stat`, 'inactive_file'),
 +        swapLimit,
 +        swapCurrent,
 +      };
@@ -85,16 +123,16 @@
 +    }
 +
 +    try {
-+      const limit = await readNumber('/sys/fs/cgroup/memory/memory.limit_in_bytes');
++      const limit = await readNumber(`${paths.v1}/memory.limit_in_bytes`);
 +
 +      if (limit == null) return null;
 +
-+      const current = await readNumber('/sys/fs/cgroup/memory/memory.usage_in_bytes');
++      const current = await readNumber(`${paths.v1}/memory.usage_in_bytes`);
 +
 +      return {
 +        limit,
 +        current: current ?? 0,
-+        inactiveFile: await readStat('/sys/fs/cgroup/memory/memory.stat', 'total_inactive_file'),
++        inactiveFile: await readStat(`${paths.v1}/memory.stat`, 'total_inactive_file'),
 +        // memsw accounting is rarely enabled; not clamped.
 +        swapLimit: null,
 +        swapCurrent: 0,

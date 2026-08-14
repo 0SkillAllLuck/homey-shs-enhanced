@@ -91,7 +91,12 @@ memory as used would cause false app kills. Swap is clamped from `memory.swap.*`
 the app-start gate tests `MemAvailable + SwapFree`. cgroup v1 is handled as a fallback,
 and everything fails open: `max`, v1's no-limit sentinel, disabled swap accounting or any
 read error leaves the host values untouched, so Homey Pro on bare metal — which shares
-this package — is unaffected. `ManagerSystemLocal.getInfo()` needs a second small edit
+this package — is unaffected. The cgroup directory is resolved from `/proc/self/cgroup`
+rather than assumed to be the mount root: in a private cgroup namespace that file reads
+`0::/` and `/sys/fs/cgroup` is already the container's own cgroup, but without cgroupns
+isolation (observed on Talos/containerd) the container sees the host hierarchy, where the
+root has no `memory.max` at all and the limit lives under the full
+`/sys/fs/cgroup/kubepods/.../<container-id>` path. `ManagerSystemLocal.getInfo()` needs a second small edit
 because it reported `os.totalmem()`/`os.freemem()`, which are node-wide too.
 
 With this in place a memory limit becomes safe, and preferable, at roughly 1–2 GiB or
