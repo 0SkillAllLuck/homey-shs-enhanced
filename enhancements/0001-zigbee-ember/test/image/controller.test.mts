@@ -465,6 +465,19 @@ test('maps delivery, timeout, and binding-table statuses to Homey errors', async
       TimeoutError,
     );
 
+    adapter.rawError = new HomeyEmberStatusError('Raw ZCL delivery', 0xdead);
+    await assert.rejects(
+      send({
+        ieeeAddress: IEEE,
+        endpointId: 1,
+        clusterId: 6,
+        zclFrame: [0x18, 1, 0],
+        enableRouteDiscovery: false,
+        options: { timeout: 100, ctx: { reqId: '002b', op: 'test' } },
+      }),
+      ZigbeeNodeUnreachableError,
+    );
+
     adapter.zdoResponses.set(33, [140, undefined]);
     await assert.rejects(
       (controller as any)._bind({

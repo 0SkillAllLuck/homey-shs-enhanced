@@ -451,6 +451,11 @@ export class HomeyEmberController extends Controller<any> {
         return new ZigbeeNodeUnreachableError(error.message, { cause: error });
       }
       if (/TIMEOUT/.test(name)) return new TimeoutError(timeout, error.message);
+      // Any other failed delivery counts as unreachable, so route repair still runs for
+      // SL statuses that newer firmware reports but the pinned herdsman enum does not name.
+      if (layer === 'sl' && (error as any).operation === 'Raw ZCL delivery') {
+        return new ZigbeeNodeUnreachableError(error.message, { cause: error });
+      }
     }
     const message = error instanceof Error ? error.message : String(error);
     if (UNREACHABLE_STATUSES.has(message.match(/status=([A-Z0-9_]+)/)?.[1] ?? '')) {

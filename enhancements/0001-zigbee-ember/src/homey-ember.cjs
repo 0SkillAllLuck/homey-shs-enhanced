@@ -4,6 +4,7 @@ const { EmberAdapter, DEFAULT_APS_OPTIONS } = require('zigbee-herdsman/dist/adap
 const { FIXED_ENDPOINTS } = require('zigbee-herdsman/dist/adapter/ember/adapter/endpoints.js');
 const {
   EmberApsOption,
+  EmberJoinDecision,
   EmberOutgoingMessageType,
   EzspStatus,
   SLStatus,
@@ -58,6 +59,43 @@ class HomeyEmberAdapter extends EmberAdapter {
     super(networkOptions, serialPortOptions, backupPath, adapterOptions);
     this.homeyPendingSends = new Map();
     this.homeyMulticastTail = Promise.resolve();
+  }
+
+  // Mirrors EmberAdapter.permitJoin, minus the ezspClearTransientLinkKeys() call on close.
+  // Homey closes permit-join as soon as it sees the new device, while some Zigbee 3.0
+  // devices (e.g. Sonoff) are still finishing trust-center key establishment. Clearing
+  // the transient key at that point aborts the exchange; the NCP expires it on its own
+  // after TRANSIENT_KEY_TIMEOUT_S anyway.
+  async permitJoin(seconds, networkAddress) {
+    if (seconds !== 0) return super.permitJoin(seconds, networkAddress);
+
+    await this.queue.execute(async () => {
+      this.checkInterpanLock();
+      const status = await this.emberSetJoinPolicy(EmberJoinDecision.ALLOW_REJOINS_ONLY);
+      if (status !== SLStatus.OK) {
+        throw new HomeyEmberStatusError('Close joining policy', status);
+      }
+    });
+
+    const clusterId = Zdo.ClusterId.PERMIT_JOINING_REQUEST;
+    const payload = Zdo.Buffalo.buildRequest(this.hasZdoMessageOverhead, clusterId, 0, 1, []);
+
+    if (networkAddress) {
+      const result = await this.sendZdo(ZSpec.BLANK_EUI64, networkAddress, clusterId, payload, false);
+      if (!Zdo.Buffalo.checkStatus(result)) {
+        throw new Error(`Close permit-join failed with ZDO status=${result[0]}`);
+      }
+      return;
+    }
+
+    const status = await this.ezsp.ezspPermitJoining(0);
+    if (status !== SLStatus.OK) {
+      throw new HomeyEmberStatusError('Close coordinator permit-join', status);
+    }
+    // networkAddress 0 means coordinator only; undefined means the whole network.
+    if (networkAddress === undefined) {
+      await this.sendZdo(ZSpec.BLANK_EUI64, ZSpec.BroadcastAddress.DEFAULT, clusterId, payload, true);
+    }
   }
 
   async withMulticastLock(operation) {

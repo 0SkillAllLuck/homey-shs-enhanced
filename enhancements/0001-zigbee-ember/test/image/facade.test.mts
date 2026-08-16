@@ -20,6 +20,25 @@ function createFacadeHarness() {
   return adapter;
 }
 
+test('closing permit-join does not clear the in-flight transient key', async () => {
+  const adapter = createFacadeHarness();
+  const calls: string[] = [];
+  adapter.ezsp = {
+    ezspPermitJoining: async () => SLStatus.OK,
+    ezspClearTransientLinkKeys: async () => {
+      calls.push('clear');
+    },
+  };
+  adapter.emberSetJoinPolicy = async () => {
+    calls.push('policy');
+    return SLStatus.OK;
+  };
+  adapter.sendZdo = async () => [0];
+
+  await adapter.permitJoin(0);
+  assert.deepEqual(calls, ['policy']);
+});
+
 test('the facade sends the caller-provided ZCL bytes unchanged', async () => {
   const adapter = createFacadeHarness();
   let captured: Buffer | undefined;
