@@ -5,8 +5,8 @@ description: >-
   pulls a public image — you build one from the repo and push it to a registry you
   control; see the licensing note in the repo README.
 type: application
-version: 0.1.0
-appVersion: "13.4.0"
+version: 0.1.1
+appVersion: "13.4.1"
 kubeVersion: ">=1.25.0-0"
 home: https://github.com/0SkillAllLuck/homey-shs-enhanced
 sources:

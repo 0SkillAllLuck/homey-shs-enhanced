@@ -7,7 +7,7 @@
 # stable by-id path of the coordinator before the first `docker compose up`.
 services:
   homey-shs:
-    image: ${HOMEY_SHS_IMAGE:-homey-shs-enhanced:13.4.0}
+    image: ${HOMEY_SHS_IMAGE:-homey-shs-enhanced:13.4.1}
     network_mode: host
     restart: unless-stopped
     cap_add:

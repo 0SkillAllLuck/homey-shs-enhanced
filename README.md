@@ -14,7 +14,7 @@ unmodified upstream image — to a public registry would be unauthorized redistr
 ## Build
 
 ```sh
-docker build -t homey-shs-enhanced:13.4.0 .
+docker build -t homey-shs-enhanced:13.4.1 .
 docker build --target test .   # run the enhancement test suites inside the image
 ```
 
@@ -30,7 +30,7 @@ docker run -d --name homey-shs \
   --cap-add NET_ADMIN \
   --security-opt systempaths=unconfined \
   -v ./data:/homey/user \
-  homey-shs-enhanced:13.4.0
+  homey-shs-enhanced:13.4.1
 ```
 
 ### Kubernetes

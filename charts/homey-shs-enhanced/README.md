@@ -6,8 +6,8 @@ image it may run is the one *you* built and pushed to a registry you control —
 licensing note in the [repo README](../../README.md).
 
 ```sh
-docker build -t registry.example.com/homey-shs-enhanced:13.4.0 ..   # from the repo root
-docker push registry.example.com/homey-shs-enhanced:13.4.0
+docker build -t registry.example.com/homey-shs-enhanced:13.4.1 ..   # from the repo root
+docker push registry.example.com/homey-shs-enhanced:13.4.1
 
 kubectl create namespace homey
 kubectl -n homey create secret docker-registry regcred \
