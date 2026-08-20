@@ -6,11 +6,11 @@
 # linux/amd64 and linux/arm64. See patches/README.md for why each patch exists and
 # enhancements/README.md for what the enhancements add.
 #
-#   docker build -t homey-shs-enhanced:13.4.0 .
+#   docker build -t homey-shs-enhanced:13.4.1 .
 #   docker build --target test .   # run the enhancement test suites inside the image
 
-# ghcr.io/athombv/homey-shs:latest == 13.4.0, built 2026-07-27
-FROM ghcr.io/athombv/homey-shs@sha256:97b00d6a074f8abc5d14a457f32e1c7a2b0bcbadfd56999932292efbe071abb9 AS upstream
+# ghcr.io/athombv/homey-shs:latest == 13.4.1, built 2026-08-18
+FROM ghcr.io/athombv/homey-shs@sha256:268b146973bddce7ee14ed5a5a8225a1b58419c15941f54916f352ff8015283f AS upstream
 
 
 # Runtime dependencies for the zigbee-ember enhancement. npm runs inside the upstream
@@ -115,8 +115,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD ["node", "-e", "const p=process.env.PORT_SERVER_HTTP||4859;fetch(`http://127.0.0.1:${p}/`,{redirect:'manual',signal:AbortSignal.timeout(5000)}).then(r=>process.exit(r.status<400?0:1)).catch(()=>process.exit(1))"]
 
 LABEL org.opencontainers.image.base.name="ghcr.io/athombv/homey-shs" \
-      org.opencontainers.image.base.digest="sha256:97b00d6a074f8abc5d14a457f32e1c7a2b0bcbadfd56999932292efbe071abb9" \
-      org.opencontainers.image.description="Homey Self-Hosted Server 13.4.0 with local patches and enhancements"
+      org.opencontainers.image.base.digest="sha256:268b146973bddce7ee14ed5a5a8225a1b58419c15941f54916f352ff8015283f" \
+      org.opencontainers.image.description="Homey Self-Hosted Server 13.4.1 with local patches and enhancements"
 
 
 # `docker build --target test .` — runs the enhancement test suites inside the built
