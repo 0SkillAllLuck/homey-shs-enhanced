@@ -1,0 +1,84 @@
+name: Release
+
+# Fires on version tags (the repo's scheme is plain X.Y.Z, e.g. 1.14.0). The
+# workflow_dispatch path exists for re-running a release against a tag that was
+# pushed before this workflow existed, or after a transient failure.
+#
+# A release here is source + the packaged Helm chart, never a container image:
+# Athom's first-party code carries no license grant, so publishing the built image
+# (or the unmodified upstream one) would be unauthorized redistribution — see the
+# licensing note in README.md. Users build the image themselves from the tag.
+
+on:
+  push:
+    tags: ['[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to create the release for
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Gate (${{ matrix.arch }})
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+      # Same gate as CI: patches must apply cleanly and the in-image enhancement
+      # test suites must pass on both architectures before a release is cut.
+      - name: Build image and run in-image test suites
+        run: docker build --target test .
+
+  release:
+    name: Create release
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+      - name: Package Helm chart
+        run: helm package charts/homey-shs-enhanced --destination dist
+
+      - name: Create GitHub release
+        run: |
+          cat > notes.md <<EOF
+          This release is patches, a Dockerfile and a Helm chart — **no container
+          image is published**. Athom's first-party code carries no license grant,
+          so redistributing the built image (or the unmodified upstream one) is not
+          authorized; see the licensing note in the README. Build it yourself from
+          this tag:
+
+              docker build -t homey-shs-enhanced:$TAG .
+              docker build --target test .   # run the enhancement test suites
+
+          The attached \`.tgz\` is the packaged Helm chart (versioned
+          independently of the repo). Push your locally built image to a registry
+          you control and point \`image.repository\` at it.
+          EOF
+          gh release create "$TAG" dist/*.tgz \
+            --verify-tag \
+            --title "$TAG" \
+            --notes-file notes.md \
+            --generate-notes

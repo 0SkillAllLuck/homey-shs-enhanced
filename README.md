@@ -1,5 +1,7 @@
 # Homey SHS - Enhanced Edition
 
+[![CI](https://github.com/0SkillAllLuck/homey-shs-enhanced/actions/workflows/ci.yml/badge.svg)](https://github.com/0SkillAllLuck/homey-shs-enhanced/actions/workflows/ci.yml)
+
 Patches and Enhancements for [Homey Self-Hosted Server](https://homey.app), applied to the official image
 at build time.
 

@@ -5,6 +5,7 @@
 !/enhancements/
 !/patches/
 !/.dockerignore
+!/.github/
 !/.gitignore
 !/Dockerfile
 !/LICENSE

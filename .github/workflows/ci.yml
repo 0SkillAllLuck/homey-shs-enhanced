@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    name: Image (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+
+      # One build is the whole gate: the patcher stage aborts on any patch or
+      # enhancement that no longer applies cleanly, and the test stage runs the
+      # enhancement test suites inside the built image.
+      - name: Build image and run in-image test suites
+        run: docker build --target test .
+
+      # The runnable image (default target); everything but the final stage is
+      # cached from the build above. Never pushed anywhere — this repo distributes
+      # patches and a Dockerfile, not an image (see the licensing note in README.md).
+      - name: Build final image
+        run: docker build -t homey-shs-enhanced:ci .
+
+  chart:
+    name: Helm chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # image.repository has no default on purpose (there is no public image to
+      # fall back on), so every lint/render supplies one.
+      - name: Lint
+        run: >-
+          helm lint --strict charts/homey-shs-enhanced
+          --set image.repository=registry.example.com/homey-shs-enhanced
+
+      - name: Render (defaults)
+        run: >-
+          helm template smoke charts/homey-shs-enhanced
+          --set image.repository=registry.example.com/homey-shs-enhanced
+          > /dev/null
+
+      - name: Render (zigbee over serial-TCP, unprivileged)
+        run: >-
+          helm template smoke charts/homey-shs-enhanced
+          --set image.repository=registry.example.com/homey-shs-enhanced
+          --set zigbee.enabled=true
+          --set zigbee.device=tcp://192.168.1.10:9998
+          > /dev/null
+
+      - name: Render (zigbee USB hostPath, privileged branch)
+        run: >-
+          helm template smoke charts/homey-shs-enhanced
+          --set image.repository=registry.example.com/homey-shs-enhanced
+          --set zigbee.enabled=true
+          --set zigbee.device=/dev/serial/by-id/usb-Nabu_Casa_ZBT-2-if00
+          > /dev/null
+
+      - name: Render (hostNetwork + ingress + existing claim)
+        run: >-
+          helm template smoke charts/homey-shs-enhanced
+          --set image.repository=registry.example.com/homey-shs-enhanced
+          --set hostNetwork=true
+          --set ingress.enabled=true
+          --set ingress.host=homey.example.com
+          --set persistence.existingClaim=homey-user
+          > /dev/null
