@@ -6,7 +6,7 @@ description: >-
   control; see the licensing note in the repo README.
 type: application
 version: 0.1.1
-appVersion: "13.4.1"
+appVersion: "13.5.0"
 kubeVersion: ">=1.25.0-0"
 home: https://github.com/0SkillAllLuck/homey-shs-enhanced
 sources:

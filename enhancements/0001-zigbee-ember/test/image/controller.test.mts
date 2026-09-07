@@ -289,10 +289,11 @@ test('maps every Homey ZDO primitive and install-code joining', async () => {
 
     await controller.permitJoin({
       duration: 120,
-      opts: { installCode: { ieeeAddress: IEEE, code: '00112233445566778899aabbccddeeffaabb' } },
+      // 16 data bytes followed by their CRC-16/X.25, little-endian.
+      opts: { installCode: { ieeeAddress: IEEE, code: '00112233445566778899aabbccddeeff528f' } },
     });
     assert.equal(adapter.installCodes[0][0], EUI64);
-    assert.equal(adapter.installCodes[0][1].toString('hex'), '00112233445566778899aabbccddeeffaabb');
+    assert.equal(adapter.installCodes[0][1].toString('hex'), '00112233445566778899aabbccddeeff528f');
     assert.equal(adapter.installCodes[0][2], false);
     assert.deepEqual(adapter.permitJoins, [120]);
     await assert.rejects(
@@ -300,7 +301,7 @@ test('maps every Homey ZDO primitive and install-code joining', async () => {
         duration: 1,
         opts: { installCode: { ieeeAddress: IEEE, code: 'z'.repeat(36) } },
       }),
-      /36 hexadecimal characters/,
+      /Invalid Code: CRC/,
     );
 
     adapter.zdoResponses.set(33, [0, undefined]);
