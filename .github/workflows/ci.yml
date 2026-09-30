@@ -64,6 +64,7 @@ jobs:
           --set image.repository=registry.example.com/homey-shs-enhanced
           --set zigbee.enabled=true
           --set zigbee.device=tcp://192.168.1.10:9998
+          --set zigbee.txPower=20
           > /dev/null
 
       - name: Render (zigbee USB hostPath, privileged branch)

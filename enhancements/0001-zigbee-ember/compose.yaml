@@ -20,6 +20,7 @@ services:
       HOMEY_ZIGBEE_BAUDRATE: ${HOMEY_ZIGBEE_BAUDRATE:-460800}
       HOMEY_ZIGBEE_RTSCTS: ${HOMEY_ZIGBEE_RTSCTS:-true}
       HOMEY_ZIGBEE_CHANNEL: ${HOMEY_ZIGBEE_CHANNEL:-11}
+      HOMEY_ZIGBEE_TX_POWER: ${HOMEY_ZIGBEE_TX_POWER:-}
     devices:
       - ${ZIGBEE_DEVICE:-/dev/serial/by-id/CHANGE_ME}:/dev/zigbee
     volumes:

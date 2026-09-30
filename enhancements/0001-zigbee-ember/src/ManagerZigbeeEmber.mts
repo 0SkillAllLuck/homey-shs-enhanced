@@ -75,6 +75,7 @@ export class ManagerZigbeeEmber extends ManagerZigbeeCore<
       baudRate: config.HOMEY_ZIGBEE_BAUDRATE,
       rtscts: config.HOMEY_ZIGBEE_RTSCTS,
       initialChannel: config.HOMEY_ZIGBEE_CHANNEL,
+      transmitPower: config.HOMEY_ZIGBEE_TX_POWER,
     });
   }
 

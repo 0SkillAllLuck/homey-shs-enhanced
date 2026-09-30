@@ -71,6 +71,7 @@ export interface HerdsmanSerialOptions {
 
 export interface HerdsmanAdapterOptions {
   disableLED: boolean;
+  transmitPower?: number;
 }
 
 export interface RawZdoFrame {

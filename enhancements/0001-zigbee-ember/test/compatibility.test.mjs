@@ -81,6 +81,7 @@ test('patches only the guarded SHS files and preserves the Bridge manager', asyn
     assert.match(config, /HOMEY_ZIGBEE_BAUDRATE:[\s\S]*460800/);
     assert.match(config, /HOMEY_ZIGBEE_RTSCTS:[\s\S]*val === '0'/);
     assert.match(config, /HOMEY_ZIGBEE_CHANNEL:[\s\S]*min\(11\)\.max\(26\)/);
+    assert.match(config, /HOMEY_ZIGBEE_TX_POWER:[\s\S]*min\(-20\)\.max\(20\)\.optional\(\)/);
     assert.match(system, /import \{ config \} from '\.\.\/config\.mts';/);
     assert.match(system, /return config\.HOMEY_ZIGBEE_BACKEND === 'ember';/);
     assert.equal(await fs.readFile(path.join(appRoot, 'lib/ManagerZigbeeBridge.mts'), 'utf8'), MANAGER);

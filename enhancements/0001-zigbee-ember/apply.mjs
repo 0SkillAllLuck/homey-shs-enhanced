@@ -92,6 +92,11 @@ await replaceExact(
     (val) => (val != null ? Number(val) : 11),
     z.number().int().min(11).max(26),
   ),
+  // Unset leaves the radio at its current power. -20..20 dBm spans the ZBT-2's EFR32MG24.
+  HOMEY_ZIGBEE_TX_POWER: z.preprocess(
+    (val) => (val == null || val === '' ? undefined : Number(val)),
+    z.number().int().min(-20).max(20).optional(),
+  ),
 `,
 );
 

@@ -130,7 +130,7 @@ class FakeAdapter extends EventEmitter {
   }
 }
 
-async function createController() {
+async function createController(transmitPower?: number) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'homey-ember-controller-'));
   const adapters: FakeAdapter[] = [];
   const controller = new HomeyEmberController({
@@ -138,6 +138,7 @@ async function createController() {
     baudRate: 460800,
     rtscts: true,
     initialChannel: 11,
+    transmitPower,
     store: new RadioStore(directory),
     adapterFactory: (options) => {
       const adapter = new FakeAdapter(options);
@@ -157,6 +158,10 @@ test('starts, persists a unified backup, and preserves raw ZCL bytes in both dir
     assert.deepEqual(adapters[0].multicastGroups, [0]);
     assert.equal(Object.hasOwn(adapters[0].options.networkOptions, 'extendedPANID'), false);
     assert.equal(adapters[0].options.networkOptions.extendedPanID.length, 8);
+    assert.deepEqual(adapters[0].options.adapterOptions, {
+      disableLED: false,
+      transmitPower: undefined,
+    });
     const storedNetwork = JSON.parse(await fs.readFile(path.join(directory, 'network.json'), 'utf8'));
     assert.equal(controller.networkSettings?.extendedPanId, storedNetwork.extendedPanId);
     assert.equal(controller.networkSettings?.channel, 11);
@@ -583,6 +588,17 @@ test('ZDO cancellation is exact before dispatch and best-effort in flight', asyn
     during.abort(duringReason);
     resolveZdo([0, { nwkAddress: 0x1234, endpointList: [1] }]);
     await assert.rejects(request, duringReason);
+  } finally {
+    await controller.destroy();
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('passes the configured transmit power to the Ember adapter', async () => {
+  const { controller, adapters, directory } = await createController(20);
+  try {
+    await controller.start();
+    assert.equal(adapters[0].options.adapterOptions.transmitPower, 20);
   } finally {
     await controller.destroy();
     await fs.rm(directory, { recursive: true, force: true });

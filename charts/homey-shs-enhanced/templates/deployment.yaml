@@ -114,6 +114,11 @@ spec:
             - name: HOMEY_ZIGBEE_CHANNEL
               value: {{ . | quote }}
             {{- end }}
+            {{- /* Not `with`: 0 dBm is a valid setting. */}}
+            {{- if or $z.txPower (eq (toString $z.txPower) "0") }}
+            - name: HOMEY_ZIGBEE_TX_POWER
+              value: {{ $z.txPower | quote }}
+            {{- end }}
             {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
