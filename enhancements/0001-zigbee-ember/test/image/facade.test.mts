@@ -268,3 +268,32 @@ test('NCP reset emits disconnect details and settles pending raw sends', async (
   });
   assert.equal(adapter.homeyPendingSends.size, 0);
 });
+
+test('herdsman debug follows Homey Zigbee debug logging, info and above always print', async (t) => {
+  // setDebug arms a one-hour auto-disable timer that would otherwise keep the file running.
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  await import('../../src/herdsman.mts');
+  const { ZigbeeLocal } = await import('@athombv/homey-local');
+  const { logger } = require('zigbee-herdsman/dist/utils/logger.js');
+  const zigbeeLocal = new ZigbeeLocal({ setBasicDeviceDebugEnabled() {}, log() {} } as any);
+  const stderr = t.mock.method(process.stderr, 'write', () => true);
+  const info = t.mock.method(console, 'info', () => undefined);
+  let built = 0;
+  const frame = () => `frame ${++built}`;
+
+  logger.debug(frame, 'zh:ember:uart:ash');
+  assert.equal(built, 0);
+  assert.equal(stderr.mock.callCount(), 0);
+
+  await zigbeeLocal.setDebug({ enabled: true });
+  logger.debug(frame, 'zh:ember:uart:ash');
+  assert.equal(built, 1);
+  assert.match(String(stderr.mock.calls.at(-1)?.arguments[0]), /zigbee:zh:ember:uart:ash.*frame 1/);
+
+  await zigbeeLocal.setDebug({ enabled: false });
+  logger.debug(frame, 'zh:ember:uart:ash');
+  assert.equal(built, 1);
+
+  logger.info('[NCP COUNTERS] 1,2,3', 'zh:ember');
+  assert.deepEqual(info.mock.calls.at(-1)?.arguments, ['zh:ember: [NCP COUNTERS] 1,2,3']);
+});

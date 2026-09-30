@@ -12,6 +12,7 @@ const {
 const ZSpec = require('zigbee-herdsman/dist/zspec/index.js');
 const Zdo = require('zigbee-herdsman/dist/zspec/zdo/index.js');
 const { BackupUtils } = require('zigbee-herdsman/dist/utils/index.js');
+const { setLogger } = require('zigbee-herdsman/dist/utils/logger.js');
 
 const DEFAULT_SEND_TIMEOUT = 15_000;
 const ZDO_REQUEST_RADIUS = 0xff;
@@ -459,5 +460,6 @@ module.exports = {
   SLStatus,
   ZSpec,
   Zdo,
+  setLogger,
   statusName,
 };

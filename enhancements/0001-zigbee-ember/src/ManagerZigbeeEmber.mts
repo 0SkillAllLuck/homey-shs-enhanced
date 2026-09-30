@@ -200,12 +200,31 @@ export class ManagerZigbeeEmber extends ManagerZigbeeCore<
   }
 
   private async teardownZigbee({ backup }: { backup: boolean }) {
+    this.abortControllerSessions();
     await this.zigbeeLocal.onZigbeeDestroy();
     if (!backup) this.controller?.suppressFinalBackup();
     await this.controller?.destroy().catch((error) =>
       this.error('Failed to stop Ember coordinator', error),
     );
     return super.onZigbeeDestroy();
+  }
+
+  /**
+   * Core keeps the abort callbacks of the last pairing and extended interview until a user aborts
+   * one, and both close over the controller that ran them. Upstream never replaces its controller;
+   * Ember recovery does. End them with their controller, so a pairing in flight cannot outlive its
+   * radio and a finished one cannot pin a replaced controller in memory until the next pairing.
+   */
+  private abortControllerSessions() {
+    for (const abort of [this._abortAddNodeCallback, this._abortInterviewNodeCallback]) {
+      try {
+        abort?.();
+      } catch (error) {
+        this.error('Failed to abort a Zigbee pairing or interview session', error);
+      }
+    }
+    this._abortAddNodeCallback = null;
+    this._abortInterviewNodeCallback = null;
   }
 
   override async onUninit() {
