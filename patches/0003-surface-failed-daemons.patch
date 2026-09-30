@@ -1,13 +1,13 @@
 --- a/apps/homey-shs/config.mts
 +++ b/apps/homey-shs/config.mts
-@@ -42,6 +42,7 @@
+@@ -46,6 +46,7 @@
    AVAHI_DAEMON_LOG_STDIO: z.preprocess((val) => val === '1', z.boolean().default(false)),
    DBUS_DAEMON_LOG_STDIO: z.preprocess((val) => val === '1', z.boolean().default(false)),
    GO2RTC_LOG_STDIO: z.preprocess((val) => val === '1', z.boolean().default(false)),
 +  HOMEY_EXIT_ON_SERVICE_FAILURE: z.preprocess((val) => val === '1', z.boolean().default(false)),
-   PORT_SERVER_WEBRTC: z.preprocess((val) => (val != null ? Number(val) : 8555), z.number()),
- 
-   HOMEY_LOG_DIR: z.string().optional().default(DEFAULT_HOMEY_LOG_DIR),
+   GO2RTC_LISTEN_ADDRESS: z.string().optional(),
+   // User/group the go2rtc daemon drops to; defaults to the dedicated go2rtc user (2001).
+   HOMEY_GO2RTC_UID: z.preprocess((val) => (val != null ? Number(val) : 2001), z.number().optional()),
 --- a/apps/homey-shs/index.mts
 +++ b/apps/homey-shs/index.mts
 @@ -7,6 +7,7 @@
@@ -18,8 +18,8 @@
    DBus,
    Go2rtcDaemon,
    MatterDaemon,
-@@ -69,6 +70,23 @@
-   logToStdio: config.GO2RTC_LOG_STDIO,
+@@ -71,6 +72,23 @@
+   gid: config.HOMEY_GO2RTC_GID,
  });
  
 +// Called when a daemon exhausts its restart budget and stays down for good. The server

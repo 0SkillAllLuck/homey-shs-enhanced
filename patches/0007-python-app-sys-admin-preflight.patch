@@ -15,12 +15,10 @@
 +}
 --- a/packages/homey-local/lib/HomeyUtilLocal.mjs
 +++ b/packages/homey-local/lib/HomeyUtilLocal.mjs
-@@ -249,6 +249,24 @@
- 
-   static getBitAt(value, position) {
+@@ -289,6 +289,24 @@
      return !!((value >> position) & 1);
-+  }
-+
+   }
+ 
 +  /**
 +   * Whether this process holds CAP_SYS_ADMIN (capability bit 21).
 +   * Fails open: an unreadable or unparseable /proc/self/status returns true, so a working
@@ -37,9 +35,11 @@
 +    } catch {
 +      return true;
 +    }
-   }
- 
-   static async readlineFromRemote(host, port) {
++  }
++
+   // Example: 192.168.1.100 / 255.255.255.0 -> 192.168.1.255
+   // Example: 10.10.0.142 / 255.255.0.0 -> 10.10.255.255
+   static getBroadcastAddress(ipAddress, subnetMask) {
 --- a/packages/homey-local/lib/AppLocal.mts
 +++ b/packages/homey-local/lib/AppLocal.mts
 @@ -38,6 +38,7 @@
@@ -48,9 +48,9 @@
  
 +import HomeyErrorMissingSysAdminCapability from './HomeyErrorMissingSysAdminCapability.mts';
  import HomeyErrorOutOfMemory from './HomeyErrorOutOfMemory.mts';
+ import { HomeyFileUtilLocal } from './HomeyFileUtilLocal.mts';
  import type { HomeyLocal } from './HomeyLocal.mts';
- import { HomeyUtilLocal } from './HomeyUtilLocal.mjs';
-@@ -1093,6 +1094,12 @@
+@@ -1099,6 +1100,12 @@
              break;
  
            case APP_RUNTIMES.PYTHON: {
@@ -63,7 +63,7 @@
              try {
                // Mount system folders to the chroot-jail
                for (const [mountSource, mountDestination] of this.homey.config
-@@ -1111,8 +1118,13 @@
+@@ -1117,8 +1124,13 @@
                  try {
                    await HomeyUtilLocal.exec(`/bin/mount -rB ${mountSource} ${mountPath}`);
                  } catch (err: unknown) {
@@ -79,7 +79,7 @@
                  }
                }
              } catch (e) {
-@@ -1334,11 +1346,14 @@
+@@ -1340,11 +1352,14 @@
  
        let stack = err instanceof Error ? (err.stack ?? 'No Stack') : 'No Stack';
        if (err instanceof HomeyErrorOutOfMemory) stack = err.message;

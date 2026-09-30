@@ -14,7 +14,7 @@ unmodified upstream image — to a public registry would be unauthorized redistr
 ## Build
 
 ```sh
-docker build -t homey-shs-enhanced:13.5.0 .
+docker build -t homey-shs-enhanced:13.5.1 .
 docker build --target test .   # run the enhancement test suites inside the image
 ```
 
@@ -30,7 +30,7 @@ docker run -d --name homey-shs \
   --cap-add NET_ADMIN \
   --security-opt systempaths=unconfined \
   -v ./data:/homey/user \
-  homey-shs-enhanced:13.5.0
+  homey-shs-enhanced:13.5.1
 ```
 
 ### Kubernetes
@@ -56,7 +56,7 @@ helm install homey ./charts/homey-shs-enhanced -n homey --create-namespace \
 | [`matter-sysctls-loud-and-scoped`](patches/README.md#0002-make-the-matter-sysctl-writes-loud-and-scoped) | Thread routing silently never works, and the sysctl loop rewrites the host's IPv6 config |
 | [`surface-failed-daemons`](patches/README.md#0003-surface-failed-daemons) | A dead avahi/matter/go2rtc leaves every health probe green |
 | [`cgroup-aware-memory-guard`](patches/README.md#0004-cgroup-aware-memory-guard) | A memory limit causes an OOM kill instead of graceful degradation |
-| [`go2rtc-loopback-and-configurable-ports`](patches/README.md#0005-keep-go2rtc-on-loopback-and-make-its-ports-configurable) | A logging flag exposes an unauthenticated API to the LAN |
+| [`go2rtc-rtsp-loopback-by-default`](patches/README.md#0005-keep-go2rtcs-rtsp-listener-on-loopback-by-default) | A logging flag exposes go2rtc's RTSP server to the LAN |
 | [`honour-homey-local-address`](patches/README.md#0006-honour-homey_local_address-everywhere) | The self-reported IP is wrong behind bridge/NAT networking |
 | [`python-app-sys-admin-preflight`](patches/README.md#0007-cap_sys_admin-pre-flight-for-python-apps) | Python apps crash-loop forever with no actionable message |
 | [`honour-ota-api-baseurl`](patches/README.md#0008-honour-athom_ota_api_baseurl) | A declared env var is never read |
