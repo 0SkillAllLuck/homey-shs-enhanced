@@ -12,9 +12,15 @@ const {
 const ZSpec = require('zigbee-herdsman/dist/zspec/index.js');
 const Zdo = require('zigbee-herdsman/dist/zspec/zdo/index.js');
 const { BackupUtils } = require('zigbee-herdsman/dist/utils/index.js');
-const { setLogger } = require('zigbee-herdsman/dist/utils/logger.js');
+// setLogger replaces the exported logger, so always read it through the module.
+const herdsmanLogger = require('zigbee-herdsman/dist/utils/logger.js');
+const { setLogger } = herdsmanLogger;
 
 const DEFAULT_SEND_TIMEOUT = 15_000;
+// Silicon Labs aborts a reassembly after three APS ACK timeouts. Completed messages are kept as
+// long so a retransmitted final block, whose ACK was lost, is acknowledged but not redelivered.
+const FRAGMENT_TTL_MS = 10_000;
+const MAX_FRAGMENTED_MESSAGES = 16;
 const ZDO_REQUEST_RADIUS = 0xff;
 const EMPTY_MULTICAST_ENTRY = Object.freeze({ multicastId: 0xffff, endpoint: 0, networkIndex: 0 });
 const PROTECTED_MULTICAST_GROUPS = new Set(
@@ -149,6 +155,69 @@ class HomeyEmberAdapter extends EmberAdapter {
     // adapter in herdsman's parser.
     if (parseError) return;
     return super.onZDOResponse(apsFrame, sender, messageContents);
+  }
+
+  // herdsman hands every APS fragment to ZCL as a complete frame and never acknowledges it, so
+  // the sender retransmits block 0 until it gives up (e.g. Aqara FP400 reports with 3+ targets,
+  // Koenkk/zigbee-herdsman#1886). The NCP leaves fragment ACKs to the host, so this ports Silicon
+  // Labs' host fragmentation plugin with its default receive window of one block: acknowledge
+  // each in-order block with sendReply and deliver the joined payload once.
+  onIncomingMessage(type, apsFrame, lastHopLqi, sender, messageContents) {
+    if (!(apsFrame.options & EmberApsOption.FRAGMENT)) {
+      return super.onIncomingMessage(type, apsFrame, lastHopLqi, sender, messageContents);
+    }
+
+    const now = Date.now();
+    this.homeyFragments ??= new Map();
+    for (const [key, message] of this.homeyFragments) {
+      if (now - message.startedAt >= FRAGMENT_TTL_MS) this.homeyFragments.delete(key);
+    }
+
+    // All blocks share the APS sequence; the low byte of groupId is the block index, and
+    // block 0 carries the block count in the high byte.
+    const index = apsFrame.groupId & 0xff;
+    const key = `${sender}:${apsFrame.sequence}`;
+    let message = this.homeyFragments.get(key);
+    if (!message) {
+      const total = apsFrame.groupId >> 8;
+      if (index !== 0 || total === 0 || this.homeyFragments.size >= MAX_FRAGMENTED_MESSAGES) return;
+      message = { total, blocks: [], startedAt: now };
+      this.homeyFragments.set(key, message);
+    }
+
+    let completed = false;
+    if (index === message.blocks.length && index < message.total) {
+      // Like the reference plugin, every block except the last must match block 0's length.
+      if (index > 0 && index < message.total - 1 && messageContents.length !== message.blocks[0].length) {
+        this.homeyFragments.delete(key);
+        return;
+      }
+      message.blocks.push(Buffer.from(messageContents));
+      completed = message.blocks.length === message.total;
+    } else if (index !== message.blocks.length - 1) {
+      // Outside the one-block window: stay silent so the sender retransmits the missing block.
+      return;
+    }
+
+    // A duplicate of the newest block is acknowledged again in case our previous ACK was lost.
+    // ACK groupId: high byte is the window's received-bitfield (all set), low byte its first block.
+    this.ezsp
+      .ezspSendReply(sender, { ...apsFrame, groupId: 0xff00 | index }, Buffer.alloc(0))
+      .then((status) => {
+        if (status !== SLStatus.OK) {
+          herdsmanLogger.logger.warning(`APS fragment ACK to ${sender} failed with status=${statusName(status)}`, 'homey:ember');
+        }
+      })
+      .catch((error) => herdsmanLogger.logger.warning(`APS fragment ACK to ${sender} failed: ${error.message}`, 'homey:ember'));
+
+    if (!completed) return;
+    return super.onIncomingMessage(
+      type,
+      { ...apsFrame, options: apsFrame.options & ~EmberApsOption.FRAGMENT, groupId: 0 },
+      lastHopLqi,
+      sender,
+      Buffer.concat(message.blocks),
+    );
   }
 
   async onMessageSent(status, type, indexOrDestination, apsFrame, messageTag) {
