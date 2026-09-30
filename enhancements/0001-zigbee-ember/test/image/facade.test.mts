@@ -129,6 +129,75 @@ test('unknown future ZDO frames are emitted raw without invoking the upstream pa
   assert.ok(frame.parseError);
 });
 
+test('APS fragments are acknowledged per block and delivered once, reassembled', async () => {
+  const adapter = createFacadeHarness();
+  adapter.oneWaitress = { resolveZCL: () => undefined };
+  const acks: number[] = [];
+  adapter.ezsp = {
+    ezspSendReply: async (sender: number, frame: any, contents: Buffer) => {
+      assert.equal(sender, 0x8522);
+      assert.equal(contents.length, 0);
+      acks.push(frame.groupId);
+      return SLStatus.OK;
+    },
+  };
+  const delivered: any[] = [];
+  adapter.on('zclPayload', (payload: any) => delivered.push(payload));
+  // Aqara FP400 three-target FC0C report captured on Ember (Koenkk/zigbee-herdsman#1886):
+  // block 0 is the 80 bytes that previously reached ZCL alone; block 1 completes target 3.
+  const block0 = Buffer.from(
+    '1c5f110a8b00004c030009002001297500292c0029000029000021f00a300030fe20000900200029e2ff2902' +
+      '0029090029170021a00f300030fe20000900200429e8ff29020029000029170021d00730',
+    'hex',
+  );
+  const block1 = Buffer.from('0030fe2000', 'hex');
+  const frame = (groupId: number) => ({
+    profileId: 260,
+    clusterId: 0xfc0c,
+    sourceEndpoint: 1,
+    destinationEndpoint: 1,
+    options: 0x8140,
+    groupId,
+    sequence: 29,
+  });
+  const receive = (groupId: number, data: Buffer) =>
+    adapter.onIncomingMessage(0, frame(groupId), 200, 0x8522, data);
+
+  receive(0x0200, block0);
+  receive(0x0200, block0); // retransmission after a lost ACK
+  receive(0x0003, block1); // outside the window: no block 3 exists
+  assert.equal(delivered.length, 0);
+  receive(0x0001, block1);
+  receive(0x0001, block1); // final block retransmitted after completion
+  await Promise.resolve();
+
+  assert.deepEqual(acks, [0xff00, 0xff00, 0xff01, 0xff01]);
+  assert.equal(delivered.length, 1);
+  assert.equal(delivered[0].data.length, 85);
+  assert.deepEqual(delivered[0].data, Buffer.concat([block0, block1]));
+  assert.equal(delivered[0].groupID, 0);
+  assert.equal(delivered[0].clusterID, 0xfc0c);
+});
+
+test('unfragmented messages pass through and stray fragments are ignored unacknowledged', async () => {
+  const adapter = createFacadeHarness();
+  adapter.oneWaitress = { resolveZCL: () => undefined };
+  let acks = 0;
+  adapter.ezsp = { ezspSendReply: async () => (acks += 1, SLStatus.OK) };
+  const delivered: any[] = [];
+  adapter.on('zclPayload', (payload: any) => delivered.push(payload));
+  const data = Buffer.from('18010a0000100001', 'hex');
+  const frame = { profileId: 260, clusterId: 6, sourceEndpoint: 1, destinationEndpoint: 1, groupId: 0, sequence: 3 };
+
+  adapter.onIncomingMessage(0, { ...frame, options: 0x0140 }, 200, 0x1234, data);
+  // A continuation block without its block 0 cannot be reassembled.
+  adapter.onIncomingMessage(0, { ...frame, options: 0x8140, groupId: 0x0001 }, 200, 0x1234, data);
+
+  assert.equal(acks, 0);
+  assert.equal(delivered.length, 1);
+  assert.deepEqual(delivered[0].data, data);
+});
+
 test('multicast mutations are serialized and reject broadcast/sentinel IDs', async () => {
   const adapter = createFacadeHarness();
   const indices: number[] = [];
