@@ -70,6 +70,19 @@ class FakeController extends EventEmitter {
   setNextResetChannel(channel?: number) {
     this.nextResetChannel = channel;
   }
+
+  addNodeAborts = 0;
+
+  addNode() {
+    const result = Promise.withResolvers<never>();
+    return {
+      abortAddNode: () => {
+        this.addNodeAborts++;
+        result.reject(new Error('aborted'));
+      },
+      addNodeResult: result.promise,
+    };
+  }
 }
 
 async function flushMicrotasks(iterations = 40) {
@@ -231,6 +244,32 @@ test('a stale disconnected controller cannot resolve or disrupt the new generati
   assert.equal(await recovered, second);
   assert.equal((manager as any).controller, second);
   assert.equal((manager as any).zigbee_ready, true);
+});
+
+test('recovery ends core pairing sessions so the replaced controller is released', async (t) => {
+  const first = new FakeController('first');
+  const second = new FakeController('second');
+  const { manager } = createHarness([first, second]);
+  t.after(() => manager.onUninit());
+
+  await manager.onInit();
+  assert.equal(await manager.getZigbeeReady(), first);
+
+  // Core keeps both abort callbacks, and with them the controller that created them.
+  const pairing = (manager as any).awaitDeviceJoinEvent({ opts: {} });
+  pairing.catch(() => undefined);
+  let interviewAborts = 0;
+  (manager as any)._abortInterviewNodeCallback = () => interviewAborts++;
+
+  first.emit('disconnected', { statusName: 'ZIGBEE_NCP_RESET' });
+  await waitFor(() => second.startCalls === 1, 'recovery generation did not start');
+
+  assert.equal(first.addNodeAborts, 1);
+  assert.equal(interviewAborts, 1);
+  await assert.rejects(pairing, /aborted/);
+  assert.equal((manager as any)._abortAddNodeCallback, null);
+  assert.equal((manager as any)._abortInterviewNodeCallback, null);
+  assert.equal(await manager.getZigbeeReady(), second);
 });
 
 test('a successful reset clears persisted and in-memory Homey nodes', async (t) => {

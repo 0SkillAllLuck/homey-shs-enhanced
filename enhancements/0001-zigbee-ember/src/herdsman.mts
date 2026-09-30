@@ -4,6 +4,7 @@ import type { EventEmitter } from 'node:events';
 
 const require = createRequire(import.meta.url);
 const facade = require('./homey-ember.cjs') as {
+  setLogger(logger: HerdsmanLogger): void;
   BackupUtils: { toUnifiedBackup(backup: unknown): unknown };
   HomeyEmberAdapter: new (
     networkOptions: HerdsmanNetworkOptions,
@@ -15,6 +16,43 @@ const facade = require('./homey-ember.cjs') as {
   ZSpec: Record<string, any>;
   Zdo: Record<string, any>;
 };
+
+type LogMessage = string | (() => string);
+
+export interface HerdsmanLogger {
+  debug(message: LogMessage, namespace: string): void;
+  info(message: LogMessage, namespace: string): void;
+  warning(message: LogMessage, namespace: string): void;
+  error(message: LogMessage, namespace: string): void;
+}
+
+interface Debugger {
+  (format: string, ...args: unknown[]): void;
+  readonly enabled: boolean;
+}
+
+// The enhancement's node_modules carries its own `debug` (a serialport dependency). Resolve the
+// copy Homey's packages use, so Homey's Zigbee debug toggle (ZigbeeLocal.setDebug) reaches it.
+const homeyDebug = createRequire(import.meta.resolve('@athombv/homey-local'))('debug') as (
+  namespace: string,
+) => Debugger;
+
+const debuggers = new Map<string, Debugger>();
+const text = (message: LogMessage) => (typeof message === 'function' ? message() : message);
+
+// herdsman's default logger prints every level to the console, down to a line per ASH frame.
+// Keep info and above, and put debug behind Homey's `zigbee:*` namespaces: off by default, on
+// while Zigbee debug logging is enabled in Homey. Lazy messages are only built when enabled.
+facade.setLogger({
+  debug(message, namespace) {
+    let log = debuggers.get(namespace);
+    if (!log) debuggers.set(namespace, (log = homeyDebug(`zigbee:${namespace}`)));
+    if (log.enabled) log('%s', text(message));
+  },
+  info: (message, namespace) => console.info(`${namespace}: ${text(message)}`),
+  warning: (message, namespace) => console.warn(`${namespace}: ${text(message)}`),
+  error: (message, namespace) => console.error(`${namespace}: ${text(message)}`),
+});
 
 export interface HerdsmanNetworkOptions {
   panID: number;

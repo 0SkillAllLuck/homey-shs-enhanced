@@ -76,6 +76,10 @@ or use [`0001-zigbee-ember/compose.yaml`](0001-zigbee-ember/compose.yaml). The f
 Ember start forms a fresh network; changing `HOMEY_ZIGBEE_CHANNEL` afterwards does
 nothing — use Homey's Zigbee reset flow, which re-pairs all devices.
 
+zigbee-herdsman's info, warnings and errors go to the Homey log. Its debug output, down to
+every serial frame, stays off unless Zigbee debug logging is enabled in Homey (it turns
+itself off after an hour) or `DEBUG` includes `zigbee:zh:*`.
+
 Version 1 forms new networks only. Migrating an existing Homey or Bridge network,
 restoring a backup onto a different coordinator, automatic firmware updates, and Homey
 Pro's private CPC/zigbeed topology are out of scope.
