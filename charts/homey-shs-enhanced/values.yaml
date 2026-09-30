@@ -65,6 +65,9 @@ zigbee:
   baudrate: ""
   rtscts: ""
   channel: ""
+  # Radio transmit power in integer dBm, -20 to 20. Empty leaves the radio at its current
+  # power (herdsman forms networks at 5 dBm). Stay within your local limit — EU: 20 dBm EIRP.
+  txPower: ""
 
 service:
   # LoadBalancer is the practical choice on a home cluster: one LAN IP for the app,

@@ -58,6 +58,7 @@ export interface HomeyEmberControllerOptions {
   baudRate: number;
   rtscts: boolean;
   initialChannel: number;
+  transmitPower?: number;
   store?: RadioStore;
   adapterFactory?: AdapterFactory;
 }
@@ -192,7 +193,7 @@ export class HomeyEmberController extends Controller<any> {
         rtscts: this.options.rtscts,
       },
       backupPath: this.store.backupPath,
-      adapterOptions: { disableLED: false },
+      adapterOptions: { disableLED: false, transmitPower: this.options.transmitPower },
     });
   }
 

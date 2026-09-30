@@ -120,7 +120,7 @@ LABEL org.opencontainers.image.base.name="ghcr.io/athombv/homey-shs" \
 
 
 # `docker build --target test .` — runs the enhancement test suites inside the built
-# image: unit tests, the compatibility-guard contract, image-level controller/manager
+# image: unit tests, the compatibility-guard contract, image-level config/controller/manager
 # tests, a native serial-binding load check, and both backend-selection paths.
 FROM final AS test
 

@@ -72,7 +72,9 @@ privilege they cost:
 | `/dev/serial/by-id/...` hostPath on the node | the container turns `privileged` |
 
 With the hostPath form, pin the pod to the stick's node via `nodeSelector`. Baudrate,
-flow control and channel keep the enhancement's defaults unless set.
+flow control and channel keep the enhancement's defaults unless set. `zigbee.txPower`
+sets the radio's transmit power in dBm; stay within your local regulations (EU: 20 dBm
+EIRP).
 
 ## State
 

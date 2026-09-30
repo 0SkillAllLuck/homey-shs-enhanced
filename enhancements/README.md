@@ -66,6 +66,7 @@ guard.
 | `HOMEY_ZIGBEE_BAUDRATE` | `460800` | Ember NCP serial speed |
 | `HOMEY_ZIGBEE_RTSCTS` | `true` | Hardware flow control (`true`/`false`/`1`/`0`) |
 | `HOMEY_ZIGBEE_CHANNEL` | `11` | Initial channel 11–26; ignored once a network exists |
+| `HOMEY_ZIGBEE_TX_POWER` | unset | Radio transmit power, integer dBm from -20 to 20 |
 
 Map the coordinator by its stable `/dev/serial/by-id/` path — `/dev/ttyUSB0`-style names
 change across replugs. Add to the `docker run` from the main README:
@@ -78,6 +79,13 @@ change across replugs. Add to the `docker run` from the main README:
 or use [`0001-zigbee-ember/compose.yaml`](0001-zigbee-ember/compose.yaml). The first
 Ember start forms a fresh network; changing `HOMEY_ZIGBEE_CHANNEL` afterwards does
 nothing — use Homey's Zigbee reset flow, which re-pairs all devices.
+
+zigbee-herdsman forms networks at 5 dBm, well below what the ZBT-2 can do, so routers
+often hear the coordinator much weaker than it hears them. `HOMEY_ZIGBEE_TX_POWER` is
+applied on every start, including to an existing network; anything outside -20..20 or not
+a whole number stops startup with a config error. Unset, the radio keeps whatever power it
+already has. **You are responsible for staying within your local regulations** — in the EU
+the 2.4 GHz limit is 20 dBm EIRP, and antenna gain counts towards it.
 
 zigbee-herdsman's info, warnings and errors go to the Homey log. Its debug output, down to
 every serial frame, stays off unless Zigbee debug logging is enabled in Homey (it turns
