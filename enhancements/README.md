@@ -45,7 +45,9 @@ ZDO indications, multicast-group management, forced route discovery, disconnect
 surfacing, and incoming APS fragment reassembly. Fragment ACKs are the host's job on an
 Ember NCP, and herdsman neither sends them nor joins blocks. Without this, a report longer
 than one packet reaches ZCL as its first ~80 bytes, as with Aqara FP400 tracking reports
-for 3+ targets ([herdsman#1886](https://github.com/Koenkk/zigbee-herdsman/issues/1886)). zigbee-herdsman is pinned to 10.6.2 — the npm postinstall refuses any other
+for 3+ targets ([herdsman#1886](https://github.com/Koenkk/zigbee-herdsman/issues/1886)).
+Route records also refresh a node's lastSeen, so a device whose traffic the NCP consumes
+itself (e.g. ZDO requests it answers) is not reported as unseen. zigbee-herdsman is pinned to 10.6.2 — the npm postinstall refuses any other
 version or Ember-adapter build — and the native serial binding is installed inside the
 upstream image per target platform, so it always matches SHS's Node runtime and libc.
 

@@ -66,6 +66,16 @@ class HomeyEmberAdapter extends EmberAdapter {
     super(networkOptions, serialPortOptions, backupPath, adapterOptions);
     this.homeyPendingSends = new Map();
     this.homeyMulticastTail = Promise.resolve();
+
+    // herdsman only debug-logs route records. Each one means its source just sent us a unicast,
+    // including frames that never reach the host as a message: ZDO requests the NCP answers
+    // itself (herdsman leaves APPLICATION_ZDO_FLAGS unset), APS commands, and profiles herdsman
+    // drops. Surfacing them keeps lastSeen alive for devices that only send such frames.
+    const onRouteRecord = this.ezsp.ezspIncomingRouteRecordHandler;
+    this.ezsp.ezspIncomingRouteRecordHandler = (source, sourceEui, ...rest) => {
+      onRouteRecord.call(this.ezsp, source, sourceEui, ...rest);
+      this.emit('homeyRouteRecord', { sender: source, eui64: sourceEui });
+    };
   }
 
   // Mirrors EmberAdapter.permitJoin, minus the ezspClearTransientLinkKeys() call on close.

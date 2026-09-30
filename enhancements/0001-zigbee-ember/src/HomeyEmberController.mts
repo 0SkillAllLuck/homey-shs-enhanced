@@ -234,6 +234,9 @@ export class HomeyEmberController extends Controller<any> {
     adapter.on('homeyZdoFrame', (frame: RawZdoFrame) => {
       this.onZdoFrame(frame).catch(() => undefined);
     });
+    adapter.on('homeyRouteRecord', (record: { sender: number; eui64: string }) => {
+      this.onRouteRecord(record).catch(() => undefined);
+    });
     adapter.on('homeyRadioStatus', (details: unknown) => this.emit('radioStatus', details));
     adapter.on('homeyDisconnected', (details: { status?: number; statusName?: string }) => {
       this.emit('disconnected', details);
@@ -327,6 +330,14 @@ export class HomeyEmberController extends Controller<any> {
         });
         break;
     }
+  }
+
+  // A route record is proof of life only: unknown sources are ignored so they never create nodes,
+  // and the address map is left to announces and address responses.
+  private async onRouteRecord({ sender, eui64 }: { sender: number; eui64: string }) {
+    const sourceIeee = eui64ToHomeyIeee(eui64);
+    const ieeeAddress = this.getNode(sourceIeee) ? sourceIeee : await this.findIeeeAddress(sender);
+    if (ieeeAddress) this.updateLastSeen(ieeeAddress);
   }
 
   private scheduleBackup() {

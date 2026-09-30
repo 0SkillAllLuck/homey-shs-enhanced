@@ -129,6 +129,22 @@ test('unknown future ZDO frames are emitted raw without invoking the upstream pa
   assert.ok(frame.parseError);
 });
 
+test('route records from the NCP are surfaced with their source', () => {
+  const adapter = new HomeyEmberAdapter(
+    { panID: 1, extendedPanID: [0, 0, 0, 0, 0, 0, 0, 1], channelList: [11], networkKey: new Array(16).fill(1), networkKeyDistribute: false },
+    { adapter: 'ember', path: '/dev/null', baudRate: 115200, rtscts: false },
+    '/nonexistent/coordinator-backup.json',
+    { disableLED: false },
+  );
+  const records: any[] = [];
+  adapter.on('homeyRouteRecord', (record: any) => records.push(record));
+
+  // Toilet ZBMINIL2: one route record a minute through its parent, no message ever delivered.
+  adapter.ezsp.ezspIncomingRouteRecordHandler(32960, '0xa4c138000000abcd', 180, -60, 1, [0x5d2a]);
+
+  assert.deepEqual(records, [{ sender: 32960, eui64: '0xa4c138000000abcd' }]);
+});
+
 test('APS fragments are acknowledged per block and delivered once, reassembled', async () => {
   const adapter = createFacadeHarness();
   adapter.oneWaitress = { resolveZCL: () => undefined };
