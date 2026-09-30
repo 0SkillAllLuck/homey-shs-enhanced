@@ -1,7 +1,7 @@
 # The patch series
 
-**Applied in numeric order, and the order matters.** Four of them touch
-`apps/homey-shs/index.mts` and three touch `apps/homey-shs/config.mts`; each patch's
+**Applied in numeric order, and the order matters.** Three of them touch
+`apps/homey-shs/index.mts`, and 0005/0006 both touch `Go2rtcDaemon.mts`; each patch's
 context lines assume its predecessors are already in. A patch that does not apply exactly
 fails the build.
 
@@ -102,24 +102,22 @@ because it reported `os.totalmem()`/`os.freemem()`, which are node-wide too.
 With this in place a memory limit becomes safe, and preferable, at roughly 1–2 GiB or
 more; below ~1 GiB the 150 MB warning threshold would engage constantly.
 
-## 0005: Keep go2rtc on loopback and make its ports configurable
+## 0005: Keep go2rtc's RTSP listener on loopback by default
 
-Touches `packages/homey-local/lib/Go2rtcDaemon.mts`, `apps/homey-shs/config.mts` and
-`apps/homey-shs/index.mts`.
+Touches `packages/homey-local/lib/Go2rtcDaemon.mts`.
 
-The generated go2rtc config binds the API and RTSP listeners to `""` — every interface —
-whenever `logToStdio` is set. So `GO2RTC_LOG_STDIO=1`, a *logging* flag, exposes go2rtc's
-unauthenticated API (with `origin: "*"`) and its RTSP server to the entire LAN, given
-that host networking is mandatory for this product. Nothing about logging requires a
-different bind address, and the internal client only ever talks to
-`http://127.0.0.1:<apiPort>`, so the patch pins both listeners to loopback
-unconditionally. The flag still controls the go2rtc log level and stdio inheritance,
-which is all it was meant to do.
+`Go2rtcDaemon` binds the RTSP listener to `""` — every interface — whenever `logToStdio`
+is set and no `GO2RTC_LISTEN_ADDRESS` is given. So `GO2RTC_LOG_STDIO=1`, a *logging*
+flag, exposes go2rtc's RTSP server to the entire LAN, given that host networking is
+mandatory for this product. The patch makes loopback the default regardless of the
+logging flag; `GO2RTC_LISTEN_ADDRESS` remains the explicit way to widen the bind. The
+flag still controls the go2rtc log level and stdio inheritance, which is all it was
+meant to do.
 
-Separately, `index.mts` hardcodes ports 1984 and 8554 while every other port in the image
-is env-configurable. Those are also Frigate's defaults, so on a host-network node running
-both, go2rtc fails to bind. The patch adds `PORT_GO2RTC_API` and `PORT_GO2RTC_RTSP` using
-the existing zod preprocess idiom; the defaults are unchanged.
+Until 13.5.1 this patch also pinned the management API to loopback and added
+`PORT_GO2RTC_API`/`PORT_GO2RTC_RTSP`. Upstream 13.5.1 moved the API to a Unix socket
+with no TCP listener and added `PORT_SERVER_GO2RTC_RTSP`, so both parts were dropped.
+`PORT_GO2RTC_RTSP` no longer exists; set `PORT_SERVER_GO2RTC_RTSP` instead.
 
 ## 0006: Honour `HOMEY_LOCAL_ADDRESS` everywhere
 
@@ -194,8 +192,6 @@ want to proxy or stub the daily update check.
 | Variable | Default | Patch |
 |---|---|---|
 | `HOMEY_EXIT_ON_SERVICE_FAILURE` | `0` | [0003](#0003-surface-failed-daemons) — exit(1) when a daemon gives up, so the restart policy recovers the stack |
-| `PORT_GO2RTC_API` | `1984` | [0005](#0005-keep-go2rtc-on-loopback-and-make-its-ports-configurable) |
-| `PORT_GO2RTC_RTSP` | `8554` | [0005](#0005-keep-go2rtc-on-loopback-and-make-its-ports-configurable) |
 
 `MATTER_MDNS_INTERFACES` also gains a meaning:
 [0002](#0002-make-the-matter-sysctl-writes-loud-and-scoped) repurposes it as the

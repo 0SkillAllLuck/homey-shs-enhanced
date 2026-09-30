@@ -1,0 +1,21 @@
+--- a/packages/homey-local/lib/Go2rtcDaemon.mts
++++ b/packages/homey-local/lib/Go2rtcDaemon.mts
+@@ -51,7 +51,7 @@
+   webrtcPort?: number;
+   /** Log go2rtc output to stdio (default: false) */
+   logToStdio?: boolean;
+-  /** Address for the RTSP listener (default: loopback, or all interfaces with stdio logs) */
++  /** Address for the RTSP listener (default: loopback) */
+   listenAddress?: string;
+   /**
+    * Drop the daemon to this user id. Provided by the platform when a dedicated
+@@ -109,7 +109,8 @@
+     this.rtspPort = opts.rtspPort ?? DEFAULT_RTSP_PORT;
+     this.webrtcPort = opts.webrtcPort ?? DEFAULT_WEBRTC_PORT;
+     this.logToStdio = opts.logToStdio ?? false;
+-    this.listenAddress = opts.listenAddress ?? (this.logToStdio ? '' : '127.0.0.1');
++    // Loopback unless explicitly configured: a logging flag must not widen the bind.
++    this.listenAddress = opts.listenAddress ?? '127.0.0.1';
+     this.runUid = opts.uid;
+     this.runGid = opts.gid;
+   }

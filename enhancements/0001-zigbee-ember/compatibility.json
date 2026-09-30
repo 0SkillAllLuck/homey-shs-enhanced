@@ -1,18 +1,18 @@
 {
-  "baseImage": "ghcr.io/athombv/homey-shs:13.5.0@sha256:64c10fa439b8395e18f063447a8ef9c08b4d273ac74b6da325f995e2640aea5e",
-  "homeyShsVersion": "13.5.0",
+  "baseImage": "ghcr.io/athombv/homey-shs:13.5.1@sha256:e52125f36392e237a98d837307b14017ea0d46070d1019dd559405ce0626afe3",
+  "homeyShsVersion": "13.5.1",
   "zigbeeVersion": "4.5.4",
   "files": {
     "/app/apps/homey-shs/lib/System.mts": "e45b8f1166f63f9dc094f3d0db30832e30d5ab46ac769009b8bf02cb26bd5a70",
     "/app/apps/homey-shs/lib/ManagerZigbee.mts": "ef7f4187fcc54a9c30936533bdb007156c1ccaeac31c7ae69de145cd47ffbc85",
-    "/app/apps/homey-shs/managers.mts": "f3435d2e98b77671914623b3c4bde4cc7584a5c2b984740585ae17d3b481483b",
+    "/app/apps/homey-shs/managers.mts": "244123618238e65b2e2ce70f9d716191b37400f31d3b3eb7ad7cf73049c81130",
     "/app/apps/homey-shs/lib/HomeySHS.mts": "6babd379da333b064eee1dd1cb214016ca80a41f2c8f92f39f3f30c97f8f2751",
-    "/app/apps/homey-shs/package.json": "193e949b9199cb45471fb808453cb6d745ce652004af7104ed00f5dbf26c1c82",
+    "/app/apps/homey-shs/package.json": "5dbe67a8de6ef64d7603577719fac6989431c3e1f76eda7d1b3297a6718875dd",
     "/app/node_modules/@athombv/zigbee/package.json": "3fa42dcd60fbf54c7847feed5e5068e064299bdbe5901c50b9182ec88f95903a",
     "/app/node_modules/@athombv/zigbee/dist/src/Controller.mjs": "7e41df7fef72757512ac1c48c199a3abeaf2788cc5c38f595f3d59b3090c16d2",
     "/app/node_modules/@athombv/zigbee/dist/src/Controller.d.mts": "2473399a2dfd014c7233edf73238fd816726abf2aec87158b6a96fba70cb3d93",
     "/app/packages/homey-core/lib/ManagerZigbee.mts": "f0942864505ff6f83c57514577a53cec1e1f083e5ff0351eec9ba4f1dc8a8fc9",
-    "/app/packages/homey-core/constants.mts": "8797e1f75222f9308a0b06f441c8ba038273461010c78be75a1af95168dbc812",
+    "/app/packages/homey-core/constants.mts": "5e02a7c4fcf2657bb842ac3cb22581e885f6384b6d53a67fc118f57f479c55bc",
     "/app/packages/homey-local/lib/ZigbeeLocal.mts": "b229c65869e3a53aa86bb5330b97a99c8960ce2e0fdb12df9635c8f252d471cf",
     "/app/packages/homey-local/lib/VirtualDeviceHomeyBridgeLocal.mts": "99216fad148c54ddb4d87d5a79d3b8a5b05dbf10ef32819e8579b689b6574ade"
   }

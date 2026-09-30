@@ -133,7 +133,7 @@ securityContext:
 podSecurityContext: {}
 
 # Extra EnvVar objects, verbatim. Patched-in knobs with no first-class value above:
-# PORT_GO2RTC_API / PORT_GO2RTC_RTSP (patch 0005), MATTER_MDNS_INTERFACES (0002),
+# MATTER_MDNS_INTERFACES (patch 0002),
 # ATHOM_OTA_API_BASEURL (0008), and upstream's DEBUG.
 extraEnv: []
 

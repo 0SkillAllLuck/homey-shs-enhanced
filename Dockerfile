@@ -6,11 +6,11 @@
 # linux/amd64 and linux/arm64. See patches/README.md for why each patch exists and
 # enhancements/README.md for what the enhancements add.
 #
-#   docker build -t homey-shs-enhanced:13.5.0 .
+#   docker build -t homey-shs-enhanced:13.5.1 .
 #   docker build --target test .   # run the enhancement test suites inside the image
 
-# ghcr.io/athombv/homey-shs:latest == 13.5.0, built 2026-09-07
-FROM ghcr.io/athombv/homey-shs@sha256:64c10fa439b8395e18f063447a8ef9c08b4d273ac74b6da325f995e2640aea5e AS upstream
+# ghcr.io/athombv/homey-shs:latest == 13.5.1, built 2026-09-28
+FROM ghcr.io/athombv/homey-shs@sha256:e52125f36392e237a98d837307b14017ea0d46070d1019dd559405ce0626afe3 AS upstream
 
 
 # Runtime dependencies for the zigbee-ember enhancement. npm runs inside the upstream
@@ -100,7 +100,7 @@ COPY --from=zigbee-ember-deps /build/node_modules/ /app/enhancements/0001-zigbee
 # swallow activation state, and it cannot be removed downstream once declared.
 
 # 4859 HTTP UI/API · 4860 HTTPS · 4861 Homey Bridge · 4862 Energy Dongle
-# 8555 go2rtc WebRTC · 5353 mDNS.  go2rtc's API (1984) and RTSP (8554) stay on loopback.
+# 8555 go2rtc WebRTC · 5353 mDNS.  go2rtc's RTSP (8554) stays on loopback; its API is a Unix socket.
 EXPOSE 4859/tcp 4860/tcp 4861/tcp 4862/tcp 8555/tcp 8555/udp 5353/udp
 
 # Upstream enables 22 debug namespaces, several dead on SHS (BluFi*, Bluez, GPIO,
@@ -115,8 +115,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD ["node", "-e", "const p=process.env.PORT_SERVER_HTTP||4859;fetch(`http://127.0.0.1:${p}/`,{redirect:'manual',signal:AbortSignal.timeout(5000)}).then(r=>process.exit(r.status<400?0:1)).catch(()=>process.exit(1))"]
 
 LABEL org.opencontainers.image.base.name="ghcr.io/athombv/homey-shs" \
-      org.opencontainers.image.base.digest="sha256:64c10fa439b8395e18f063447a8ef9c08b4d273ac74b6da325f995e2640aea5e" \
-      org.opencontainers.image.description="Homey Self-Hosted Server 13.5.0 with local patches and enhancements"
+      org.opencontainers.image.base.digest="sha256:e52125f36392e237a98d837307b14017ea0d46070d1019dd559405ce0626afe3" \
+      org.opencontainers.image.description="Homey Self-Hosted Server 13.5.1 with local patches and enhancements"
 
 
 # `docker build --target test .` — runs the enhancement test suites inside the built
