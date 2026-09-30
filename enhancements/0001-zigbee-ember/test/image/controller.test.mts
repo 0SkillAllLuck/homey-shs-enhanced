@@ -281,6 +281,31 @@ test('translates joins, ZDO announcements, descriptors, and reset channel change
   }
 });
 
+test('route records refresh lastSeen of known nodes only', async () => {
+  const { controller, adapters, directory } = await createController();
+  try {
+    await controller.start();
+    const updates: string[] = [];
+    controller.on('nodeUpdate', ({ updateType, node }: any) => {
+      if (updateType === 'lastSeen') updates.push(node.ieeeAddress);
+    });
+    const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+    adapters[0].emit('homeyRouteRecord', { sender: 0x1234, eui64: EUI64 });
+    // The NCP may not know the source EUI64; fall back to the network address.
+    adapters[0].emit('homeyRouteRecord', { sender: 0x1234, eui64: '0x0000000000000000' });
+    adapters[0].emit('homeyRouteRecord', { sender: 0x9999, eui64: '0x00124b0009999999' });
+    await settle();
+
+    assert.deepEqual(updates, [IEEE, IEEE]);
+    assert.ok(controller.getLastSeen(IEEE));
+    assert.equal(controller.getNode('00:12:4b:00:09:99:99:99'), null);
+  } finally {
+    await controller.destroy();
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('maps every Homey ZDO primitive and install-code joining', async () => {
   const { controller, adapters, directory } = await createController();
   try {
